@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "GhostTraffic",
+  "name": "How I Met Your Tracker",
   "version": "1.0.0",
   "description": "Make invisible web tracking visible and controllable.",
   "permissions": [

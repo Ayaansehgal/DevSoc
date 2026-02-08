@@ -158,6 +158,10 @@ panel.innerHTML = `
     margin-bottom:8px;
     cursor:pointer;
   ">🛡️ Block All Trackers</button>
+  <button id="gt-export" style="width:100%; margin-top:6px;">
+  📤 Export Privacy Report
+</button>
+
 
   <div style="margin-bottom:6px; font-size:11px; color:#94a3b8;">
     Top third-party connections
@@ -220,62 +224,89 @@ function render() {
   const list = document.getElementById("gt-domains");
   list.innerHTML = "";
 
-  [...domainCounts.entries()].slice(0, 10).forEach(([d,c]) => {
+  [...domainCounts.entries()].slice(0, 10).forEach(([domain, count]) => {
     const row = document.createElement("div");
+    row.className = "gt-row";
     row.style = `
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  cursor:pointer;
-  padding:6px 8px;
-  border-radius:8px;
-  margin-bottom:4px;
-  transition: background .15s ease;
-`;
-row.onmouseenter = () => row.style.background = "rgba(255,255,255,0.06)";
-row.onmouseleave = () => row.style.background = "transparent";
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:6px;
+      padding:6px 8px;
+      border-radius:8px;
+      margin-bottom:4px;
+      background: rgba(255,255,255,0.03);
+      cursor: default;
+    `;
 
-    row.innerHTML = `<span>${d} (${c})</span><span>${blocked.has(d) ? "🛑" : ""}</span>`;
-    row.onclick = () => showExplainer(d);
+    const left = document.createElement("div");
+    left.innerHTML = `<b>${domain}</b> <span style="color:#94a3b8">(${count})</span>`;
+
+    const actions = document.createElement("div");
+    actions.style = "display:flex; gap:6px;";
+
+    const explainBtn = document.createElement("button");
+    explainBtn.textContent = "Why?";
+    explainBtn.style = `
+      padding:4px 6px;
+      border-radius:6px;
+      border:none;
+      cursor:pointer;
+      background:rgba(255,255,255,0.08);
+      color:#e5e7eb;
+      font-size:11px;
+    `;
+    explainBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      showExplainer(domain);
+    });
+
+    const blockBtn = document.createElement("button");
+    blockBtn.textContent = blocked.has(domain) ? "Unblock" : "Block";
+    blockBtn.style = `
+      padding:4px 6px;
+      border-radius:6px;
+      border:none;
+      cursor:pointer;
+      background:${blocked.has(domain) ? "#334155" : "#ef4444"};
+      color:#fff;
+      font-size:11px;
+    `;
+    blockBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      blocked.has(domain) ? unblock(domain) : block(domain);
+    });
+
+    actions.appendChild(explainBtn);
+    actions.appendChild(blockBtn);
+
+    row.appendChild(left);
+    row.appendChild(actions);
     list.appendChild(row);
   });
 }
 
-function showExplainer(domain) {
-  const info = explain(domain);
-  const el = document.getElementById("gt-explainer");
-  el.style.display = "block";
-  el.innerHTML = `
-  <div style="font-weight:700; font-size:13px; margin-bottom:4px;">
-    ${info.name} <span style="color:#94a3b8;">(${info.category})</span>
-  </div>
-  <div style="margin-bottom:6px;">
-    <span style="color:#f87171;">Risk:</span> ${info.risk}
-  </div>
-  <div style="margin-bottom:6px;">${info.what}</div>
-  <div style="color:#94a3b8; font-size:11px;">
-    Data shared: ${info.data.join(", ")}
-  </div>
-  <button id="gt-action-btn" style="
-    margin-top:8px;
-    width:100%;
-    padding:6px;
-    border-radius:8px;
-    border:none;
-    background: linear-gradient(135deg, #ef4444, #fb7185);
-    color:#450a0a;
-    font-weight:600;
-    cursor:pointer;
-  ">
-    ${blocked.has(domain) ? "Unblock" : "Block"}
-  </button>
-`;
 
-  document.getElementById("gt-action-btn").onclick = () =>
-    blocked.has(domain) ? unblock(domain) : block(domain);
+
+function showExplainer(domain) {
+  const info = EXPLAINERS[domain] || {
+    name: domain,
+    category: "Unknown",
+    what: "Third-party service receiving data from this site.",
+    risk: "Unknown",
+    data: ["Browsing behavior"]
+  };
+
+  alert(
+    `🔍 ${info.name}\n\n` +
+    `Category: ${info.category}\n\n` +
+    `What it does:\n${info.what}\n\n` +
+    `Risk:\n${info.risk}\n\n` +
+    `Data collected:\n- ${info.data.join("\n- ")}`
+  );
 }
 
-/* ---------------- Alerts ---------------- */
+
 
 function showAlert(domain) {
   if (document.getElementById("gt-alert")) return;
@@ -333,3 +364,195 @@ chrome.runtime.onMessage.addListener(msg => {
     }
   }
 });
+
+function buildPrivacyReport() {
+  const topDomains = [...domainCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 15)
+    .map(([domain, count]) => ({
+      domain,
+      requests: count,
+      risk: isSuspicious(domain) ? "high" : "normal",
+      blocked: blocked.has(domain)
+    }));
+
+  return {
+    generatedAt: new Date().toISOString(),
+    site: location.hostname,
+    totalRequests: total,
+    uniqueDomains: domainCounts.size,
+    suspiciousCount: topDomains.filter(d => d.risk === "high").length,
+    topDomains
+  };
+}
+const exportBtn = document.getElementById("gt-export");
+if (exportBtn) {
+  exportBtn.onclick = () => {
+    const report = buildPrivacyReport();
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `ghosttraffic-report-${location.hostname}.json`;
+    a.click();
+
+    URL.revokeObjectURL(url);
+  };
+}
+function buildPrettyReportHTML() {
+  const topDomains = [...domainCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([domain, count]) => {
+      const status = blocked.has(domain) ? "Blocked" : "Allowed";
+      const risk = isSuspicious(domain) ? "High" : "Normal";
+      return `<li><b>${domain}</b> — ${risk} risk — ${status}</li>`;
+    })
+    .join("");
+
+  return `
+  <html>
+    <head>
+      <title>GhostTraffic Privacy Report</title>
+      <style>
+        body { font-family: system-ui, -apple-system, Segoe UI, sans-serif; padding: 32px; color: #0f172a; }
+        h1 { margin-bottom: 4px; }
+        .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+        .metric { font-size: 14px; margin: 6px 0; }
+        .bad { color: #dc2626; font-weight: 600; }
+        .good { color: #16a34a; font-weight: 600; }
+        ul { padding-left: 18px; }
+        footer { margin-top: 24px; font-size: 12px; color: #64748b; }
+      </style>
+    </head>
+    <body>
+      <h1>👻 GhostTraffic Privacy Report</h1>
+      <div style="color:#475569;">Site: ${location.hostname}</div>
+      <div style="color:#475569;">Date: ${new Date().toLocaleString()}</div>
+
+      <div class="card">
+        <div class="metric bad">🚨 Total requests: ${total}</div>
+        <div class="metric">🌐 Third-party domains: ${domainCounts.size}</div>
+        <div class="metric good">🛡️ Blocked trackers: ${[...blocked].length}</div>
+      </div>
+
+      <div class="card">
+        <h3>Top Third-Party Trackers</h3>
+        <ul>${topDomains}</ul>
+      </div>
+
+      <div class="card">
+        <h3>Why this matters</h3>
+        <p>
+          Many websites embed third-party services that track your behavior across the web.
+          GhostTraffic makes these hidden data flows visible and lets you block high-risk trackers.
+        </p>
+      </div>
+
+      <footer>
+        Generated locally by GhostTraffic. No data was sent to any server.
+      </footer>
+    </body>
+  </html>
+  `;
+}
+document.getElementById("gt-export").onclick = () => {
+  const html = buildPrettyReportHTML();
+  const blob = new Blob([html], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `ghosttraffic-report-${location.hostname}.html`;
+  a.click();
+
+  URL.revokeObjectURL(url);
+};
+function explainDomain(domain) {
+  const info = TRACKER_KB[domain] || {
+    category: "Unknown",
+    risks: ["Third-party service with unclear data practices."],
+    regulation: "No public documentation available."
+  };
+
+  showModal(`
+    🔍 ${domain}
+    Category: ${info.category}
+
+    Why this matters:
+    ${info.risks.map(r => `• ${r}`).join("\n")}
+
+    Legal context:
+    ${info.regulation}
+  `);
+}
+function renderDomainRow(domain, count) {
+  const row = document.createElement("div");
+  row.className = "gt-row";
+
+  row.innerHTML = `
+    <span class="gt-domain">${domain}</span>
+    <span class="gt-count">${count}</span>
+    <button class="gt-block">Block</button>
+    <button class="gt-explain">Why is this risky?</button>
+  `;
+
+  // Block handler (you already have this)
+  row.querySelector(".gt-block").onclick = () => {
+    chrome.runtime.sendMessage({ type: "BLOCK_DOMAIN", domain });
+  };
+
+  // Explain handler (new)
+  row.querySelector(".gt-explain").onclick = () => {
+    explainDomain(domain);
+  };
+
+  return row;
+}
+function renderDomains() {
+  list.innerHTML = "";
+  domainCounts.forEach((count, domain) => {
+    list.appendChild(renderDomainRow(domain, count));
+  });
+}
+const TRACKER_KB = {
+  "doubleclick.net": {
+    category: "Advertising Tracker",
+    risks: [
+      "Tracks you across multiple websites",
+      "Builds a behavioral profile for ad targeting"
+    ],
+    regulation: "Usually requires explicit consent under GDPR."
+  },
+  "facebook.com": {
+    category: "Social Media Tracker",
+    risks: [
+      "Links browsing behavior to Facebook profile",
+      "Enables cross-site tracking even when logged out"
+    ],
+    regulation: "Often requires consent depending on region."
+  },
+  "google-analytics.com": {
+    category: "Analytics",
+    risks: [
+      "Collects browsing behavior and device information",
+      "Shares data with Google services"
+    ],
+    regulation: "Allowed with anonymization and consent."
+  }
+};
+function explainDomain(domain) {
+  const info = TRACKER_KB[domain] || {
+    category: "Unknown third-party service",
+    risks: ["This domain is a third-party request with unclear data practices."],
+    regulation: "No public documentation available."
+  };
+
+  alert(
+    `🔍 ${domain}\n\n` +
+    `Category: ${info.category}\n\n` +
+    `Why this matters:\n- ${info.risks.join("\n- ")}\n\n` +
+    `Legal context:\n${info.regulation}`
+  );
+}
