@@ -2,6 +2,7 @@
 
 let visible = false;
 let backgroundMode = true;
+let allBlocked = false;
 let total = 0;
 const domainCounts = new Map();
 const blocked = new Set();
@@ -122,7 +123,7 @@ panel.style = `
   position: fixed;
   top: 16px;
   right: 16px;
-  width: 380px;
+  width: 520px;
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   background: rgba(255, 255, 255, 0.85);
@@ -210,9 +211,9 @@ panel.innerHTML = `
         flex: 1;
         padding: 10px 12px;
         border-radius: 10px;
-        border: 1px solid rgba(37, 99, 235, 0.25);
-        background: rgba(37, 99, 235, 0.1);
-        color: #1d4ed8;
+        border: 1px solid rgba(220, 38, 38, 0.25);
+        background: rgba(220, 38, 38, 0.1);
+        color: #dc2626;
         font-weight: 600;
         font-size: 12px;
         cursor: pointer;
@@ -296,8 +297,27 @@ document.getElementById("gt-bg-toggle").onclick = () => {
 };
 
 document.getElementById("gt-block-all").onclick = () => {
-  for (const d of domainCounts.keys()) {
-    if (isThirdParty(d) && !isSafe(d)) block(d);
+  const btn = document.getElementById("gt-block-all");
+  allBlocked = !allBlocked;
+
+  if (allBlocked) {
+    // Block all third-party connections
+    for (const d of domainCounts.keys()) {
+      if (isThirdParty(d) && !isSafe(d)) block(d);
+    }
+    btn.textContent = "Unblock All";
+    btn.style.borderColor = "rgba(22, 163, 74, 0.25)";
+    btn.style.background = "rgba(22, 163, 74, 0.1)";
+    btn.style.color = "#15803d";
+  } else {
+    // Unblock all connections
+    for (const d of blocked) {
+      unblock(d);
+    }
+    btn.textContent = "Block All";
+    btn.style.borderColor = "rgba(220, 38, 38, 0.25)";
+    btn.style.background = "rgba(220, 38, 38, 0.1)";
+    btn.style.color = "#dc2626";
   }
 };
 
@@ -520,7 +540,7 @@ function render() {
     row.onmouseout = () => row.style.background = "transparent";
 
     row.innerHTML = `
-      <td style="padding: 10px 12px; max-width: 120px;">
+      <td style="padding: 10px 12px;">
         <div style="display: flex; align-items: center; gap: 8px;">
           <img src="https://www.google.com/s2/favicons?domain=${domain}&sz=32" 
                style="width: 16px; height: 16px; border-radius: 3px; flex-shrink: 0;" 
@@ -528,7 +548,7 @@ function render() {
           <span style="font-weight: 500; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${domain}">${domain}</span>
         </div>
       </td>
-      <td style="padding: 10px 12px; color: #475569; max-width: 100px;">
+      <td style="padding: 10px 12px; color: #475569;">
         <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;" title="${company}">${company}</span>
       </td>
       <td style="padding: 10px 12px;">
