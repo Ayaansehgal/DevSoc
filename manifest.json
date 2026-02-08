@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "GhostTraffic",
+  "version": "1.0.0",
+  "description": "Make invisible web tracking visible and controllable.",
+  "permissions": [
+    "webRequest",
+    "declarativeNetRequest",
+    "declarativeNetRequestWithHostAccess",
+    "tabs"
+  ],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "service_worker.js" },
+  "action": { "default_title": "GhostTraffic" },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content_script.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
