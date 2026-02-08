@@ -2,7 +2,6 @@
 
 let visible = false;
 let backgroundMode = true;
-let allBlocked = false;
 let total = 0;
 const domainCounts = new Map();
 const blocked = new Set();
@@ -297,28 +296,22 @@ document.getElementById("gt-bg-toggle").onclick = () => {
 };
 
 document.getElementById("gt-block-all").onclick = () => {
-  const btn = document.getElementById("gt-block-all");
-  allBlocked = !allBlocked;
+  // Temporarily pause counting to prevent spike
+  window.gtPauseCount = true;
 
-  if (allBlocked) {
-    // Block all third-party connections
-    for (const d of domainCounts.keys()) {
-      if (isThirdParty(d) && !isSafe(d)) block(d);
+  // Block all third-party connections
+  for (const d of domainCounts.keys()) {
+    if (isThirdParty(d) && !isSafe(d) && !blocked.has(d)) {
+      chrome.runtime.sendMessage({ type: "BLOCK_DOMAIN", domain: d });
+      blocked.add(d);
     }
-    btn.textContent = "Unblock All";
-    btn.style.borderColor = "rgba(22, 163, 74, 0.25)";
-    btn.style.background = "rgba(22, 163, 74, 0.1)";
-    btn.style.color = "#15803d";
-  } else {
-    // Unblock all connections
-    for (const d of blocked) {
-      unblock(d);
-    }
-    btn.textContent = "Block All";
-    btn.style.borderColor = "rgba(220, 38, 38, 0.25)";
-    btn.style.background = "rgba(220, 38, 38, 0.1)";
-    btn.style.color = "#dc2626";
   }
+  render();
+
+  // Resume counting after a short delay
+  setTimeout(() => {
+    window.gtPauseCount = false;
+  }, 500);
 };
 
 document.getElementById("gt-export").onclick = () => {
@@ -818,6 +811,9 @@ chrome.runtime.onMessage.addListener(msg => {
   }
 
   if (msg.type === "GHOST_TRAFFIC") {
+    // Skip counting if paused (during Block All operation)
+    if (window.gtPauseCount) return;
+
     const d = getDomain(msg.payload.url);
     if (!d) return;
 
