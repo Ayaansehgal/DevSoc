@@ -1,7 +1,7 @@
-let ruleId = Date.now(); 
+let ruleId = Date.now();
 
 chrome.action.onClicked.addListener(tab => {
-  chrome.tabs.sendMessage(tab.id, { type: "TOGGLE_OVERLAY" }).catch(() => {});
+  chrome.tabs.sendMessage(tab.id, { type: "TOGGLE_OVERLAY" }).catch(() => { });
 });
 
 chrome.webRequest.onBeforeRequest.addListener(
@@ -13,7 +13,7 @@ chrome.webRequest.onBeforeRequest.addListener(
         url: details.url,
         resourceType: details.type
       }
-    }).catch(() => {});
+    }).catch(() => { });
   },
   { urls: ["<all_urls>"] }
 );
@@ -21,8 +21,19 @@ chrome.webRequest.onBeforeRequest.addListener(
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === "BLOCK_DOMAIN") {
     chrome.declarativeNetRequest.getDynamicRules(existingRules => {
-      const maxId = existingRules.reduce((max, r) => Math.max(max, r.id), 0);
-      const newRuleId = maxId + 1;
+      // Check if this domain already has a blocking rule
+      const existingRule = existingRules.find(r =>
+        r.condition && r.condition.urlFilter === msg.domain
+      );
+
+      if (existingRule) {
+        // Domain already blocked, return success
+        sendResponse({ ok: true, ruleId: existingRule.id, alreadyBlocked: true });
+        return;
+      }
+
+      // Generate a unique ID using timestamp + random number
+      const newRuleId = Date.now() + Math.floor(Math.random() * 10000);
 
       chrome.declarativeNetRequest.updateDynamicRules({
         addRules: [{
@@ -36,11 +47,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         }],
         removeRuleIds: []
       })
-      .then(() => sendResponse({ ok: true, ruleId: newRuleId }))
-      .catch(err => {
-        console.error("Failed to block domain:", err);
-        sendResponse({ ok: false, error: err.message });
-      });
+        .then(() => sendResponse({ ok: true, ruleId: newRuleId }))
+        .catch(err => {
+          console.error("Failed to block domain:", err);
+          sendResponse({ ok: false, error: err.message });
+        });
     });
 
     return true;
