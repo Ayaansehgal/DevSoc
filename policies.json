@@ -1,0 +1,132 @@
+{
+  "version": "2.0",
+  "thresholds": {
+    "restrict": 30,
+    "sandbox": 60,
+    "block": 85
+  },
+  "criticalContextOverrides": {
+    "block": "sandbox",
+    "sandbox": "restrict"
+  },
+  "contextPatterns": {
+    "checkout": [
+      "/checkout", "/cart", "/basket", "/payment", "/pay",
+      "/order", "/billing", "/purchase", "/shop/cart",
+      "/buy", "/paymentmethod", "/shipping"
+    ],
+    "login": [
+      "/login", "/signin", "/auth", "/authenticate",
+      "/sso", "/oauth", "/session", "/account/login",
+      "/user/login", "/connect"
+    ],
+    "payment": [
+      "/stripe", "/paypal", "/square", "/braintree",
+      "/checkout", "/payment-method", "/cardpayment",
+      "/paysecure", "/payment/process"
+    ]
+  },
+  "domSignals": {
+    "checkout": [
+      "input[type='text'][name*='card']",
+      "input[type='text'][name*='credit']",
+      "input[autocomplete='cc-number']",
+      "input[autocomplete='cc-exp']",
+      "input[autocomplete='cc-csc']",
+      ".checkout-form",
+      "#payment-form",
+      "#checkout",
+      "[data-testid*='checkout']"
+    ],
+    "login": [
+      "input[type='password']",
+      "input[name='username']",
+      "input[name='email'][type='email'] + input[type='password']",
+      ".login-form",
+      "#login",
+      "[data-testid*='login']",
+      "form[action*='login']"
+    ]
+  },
+  "enforcementModes": {
+    "allow": {
+      "description": "No restrictions applied",
+      "color": "#10b981",
+      "icon": "✓",
+      "actions": []
+    },
+    "restrict": {
+      "description": "Limited fingerprinting, minimized headers",
+      "color": "#f59e0b",
+      "icon": "⚠",
+      "actions": ["strip_cookies", "limit_headers"]
+    },
+    "sandbox": {
+      "description": "No persistence, isolated execution",
+      "color": "#ef4444",
+      "icon": "⊘",
+      "actions": ["block_cookies", "block_storage", "isolate"]
+    },
+    "block": {
+      "description": "Completely blocked",
+      "color": "#7f1d1d",
+      "icon": "✕",
+      "actions": ["block_request"]
+    }
+  },
+  "riskFactors": {
+    "knownHighRiskTracker": 35,
+    "knownMediumRiskTracker": 20,
+    "sessionRecording": 40,
+    "crossSiteRequest": 15,
+    "fingerprintingAPI": 20,
+    "excessiveFrequency": 15,
+    "thirdPartyCookie": 10,
+    "unknownDomain": 5,
+    "suspiciousCategory": 25
+  },
+  "categoryRiskLevels": {
+    "Advertising": 30,
+    "Session Recording": 45,
+    "Analytics": 15,
+    "Social": 25,
+    "Tag Manager": 20,
+    "Payment": -20,
+    "Security": -10,
+    "CDN": -15,
+    "Unknown": 10
+  },
+  "safeDomains": [
+    "cloudflare.com",
+    "gstatic.com",
+    "googleapis.com",
+    "cdnjs.cloudflare.com",
+    "jsdelivr.net",
+    "unpkg.com",
+    "bootstrapcdn.com",
+    "jquery.com",
+    "cloudfront.net"
+  ],
+  "criticalDomains": [
+    "stripe.com",
+    "paypal.com",
+    "braintree.com",
+    "square.com",
+    "recaptcha.net",
+    "google.com/recaptcha"
+  ],
+  "highRiskTrackers": [
+    "doubleclick.net",
+    "hotjar.com",
+    "fullstory.com",
+    "mouseflow.com",
+    "smartlook.com",
+    "logrocket.com",
+    "inspectlet.com"
+  ],
+  "spikeThreshold": {
+    "requests": 50,
+    "timeWindow": 5000
+  },
+  "deferredBlockingDelay": 3000
+}

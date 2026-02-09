@@ -1,830 +1,633 @@
-/* GhostTraffic Content Script - White Glass UI with data-testid attributes */
+// Content Script - UI overlay and DOM context detection
+// Enhanced with glassmorphic design and comprehensive features
 
-let visible = false;
+let overlayVisible = false;
 let backgroundMode = true;
-let total = 0;
-const domainCounts = new Map();
-const blocked = new Set();
-let lastSpike = 0;
-let trackerKB = {};
+let trackers = [];
+let currentContexts = [];
+let stats = { total: 0, allowed: 0, restricted: 0, sandboxed: 0, blocked: 0 };
+let lastUpdate = 0;
 
-// Load tracker knowledge base from JSON file
-(async () => {
-  try {
-    const response = await fetch(chrome.runtime.getURL('tracker_kb.json'));
-    trackerKB = await response.json();
-    console.log('[GhostTraffic] Tracker KB loaded:', Object.keys(trackerKB).length, 'entries');
-  } catch (e) {
-    console.warn('[GhostTraffic] Failed to load tracker KB:', e);
-  }
+// Initialize
+(function init() {
+  console.log('[HIMT Content] Initializing...');
+  detectDOMContexts();
+  requestTrackerUpdate();
+  
+  // Periodic updates
+  setInterval(detectDOMContexts, 5000);
+  setInterval(requestTrackerUpdate, 3000);
 })();
 
-const SAFE_DOMAINS = ["cloudflare.com", "gstatic.com", "googleapis.com", "cdnjs.cloudflare.com", "jsdelivr.net"];
-
-const HIGH_RISK_TRACKERS = [
-  "doubleclick.net",
-  "hotjar.com",
-  "facebook.com",
-  "fullstory.com",
-  "mouseflow.com"
-];
-
-const TRACKER_KB = {
-  "doubleclick.net": {
-    name: "Google DoubleClick",
-    category: "Advertising",
-    risk: "HIGH",
-    description: "Tracks you across websites to build an advertising profile.",
-    dataCollected: ["Pages visited", "Ads clicked", "Interests"],
-    regulation: "Usually requires explicit consent under GDPR."
-  },
-  "facebook.com": {
-    name: "Meta Pixel",
-    category: "Social",
-    risk: "HIGH",
-    description: "Links your browsing to your Facebook profile.",
-    dataCollected: ["Products viewed", "Articles read"],
-    regulation: "Often requires consent depending on region."
-  },
-  "google-analytics.com": {
-    name: "Google Analytics",
-    category: "Analytics",
-    risk: "MEDIUM",
-    description: "Tracks how you use websites and shares analytics with Google.",
-    dataCollected: ["Pages visited", "Location", "Device info"],
-    regulation: "Allowed with anonymization and consent."
-  },
-  "hotjar.com": {
-    name: "Hotjar",
-    category: "Session Recording",
-    risk: "HIGH",
-    description: "Records mouse movement and interaction behavior.",
-    dataCollected: ["Clicks", "Scrolling", "Form interactions"],
-    regulation: "Requires explicit consent for session recording."
-  },
-  "fullstory.com": {
-    name: "FullStory",
-    category: "Session Recording",
-    risk: "HIGH",
-    description: "Records user sessions including clicks and inputs.",
-    dataCollected: ["Session recordings", "User interactions"],
-    regulation: "Requires explicit consent."
-  }
-};
-
-/* ---------------- Utility Functions ---------------- */
-
-function getDomain(url) {
-  try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return null; }
-}
-
-function isThirdParty(domain) {
-  return !location.hostname.endsWith(domain);
-}
-
-function isSafe(domain) {
-  return SAFE_DOMAINS.some(s => domain === s || domain.endsWith("." + s));
-}
-
-function isSpike() {
-  const now = Date.now();
-  const spike = (now - lastSpike) < 1200;
-  lastSpike = now;
-  return spike;
-}
-
-function isSuspicious(domain) {
-  return HIGH_RISK_TRACKERS.some(t => domain.includes(t));
-}
-
-function calculateRiskLevel(domain, requestCount) {
-  if (isSuspicious(domain)) return "HIGH";
-  if (requestCount > 50) return "MEDIUM";
-  return "LOW";
-}
-
-function getTrackerInfo(domain) {
-  return TRACKER_KB[domain] || {
-    name: domain,
-    category: "Unknown",
-    risk: "UNKNOWN",
-    description: "Third-party service with unclear data practices.",
-    dataCollected: ["Browsing behavior"],
-    regulation: "No public documentation available."
+// Detect DOM-based contexts (checkout, login forms)
+function detectDOMContexts() {
+  const signals = {
+    checkout: document.querySelectorAll(
+      'input[type="text"][name*="card"], input[autocomplete="cc-number"], input[autocomplete="cc-exp"], input[autocomplete="cc-csc"], .checkout-form, #payment-form, #checkout, [data-testid*="checkout"]'
+    ),
+    login: document.querySelectorAll(
+      'input[type="password"], input[name="username"], .login-form, #login, [data-testid*="login"], form[action*="login"]'
+    )
   };
-}
 
-/* ---------------- UI Panel (White Glass Effect) ---------------- */
+  const domSignals = {
+    checkout: signals.checkout.length > 0 ? Array.from(signals.checkout).map(el => el.tagName) : [],
+    login: signals.login.length > 0 ? Array.from(signals.login).map(el => el.tagName) : []
+  };
 
-const panel = document.createElement("div");
-panel.setAttribute("data-testid", "panel-main");
-panel.style = `
-  position: fixed;
-  top: 16px;
-  right: 16px;
-  width: 520px;
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  background: rgba(255, 255, 255, 0.85);
-  color: #1e293b;
-  z-index: 999999;
-  border-radius: 20px;
-  padding: 20px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', sans-serif;
-  font-size: 13px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.05);
-  display: none;
-  line-height: 1.5;
-`;
-
-panel.innerHTML = `
-  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-    <div style="display: flex; align-items: center;">
-      <img src="${chrome.runtime.getURL('assets/logo2.png')}" 
-           alt="Logo" 
-           style="height: 65px; width: auto;"
-           data-testid="panel-logo" />
-    </div>
-    <button 
-      data-testid="btn-close"
-      id="gt-close" 
-      style="
-        background: rgba(0, 0, 0, 0.04);
-        border: 1px solid rgba(0, 0, 0, 0.06);
-        color: #475569;
-        width: 28px;
-        height: 28px;
-        border-radius: 8px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 14px;
-        transition: all 0.15s ease;
-      "
-      onmouseover="this.style.background='rgba(0,0,0,0.08)'"
-      onmouseout="this.style.background='rgba(0,0,0,0.04)'"
-    >&#x2715;</button>
-  </div>
-
-  <div 
-    id="gt-stats" 
-    data-testid="stats-container"
-    style="
-      background: rgba(0, 0, 0, 0.03);
-      border: 1px solid rgba(0, 0, 0, 0.06);
-      padding: 14px 16px;
-      border-radius: 12px;
-      margin-bottom: 12px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    "
-  >
-    <span style="color: #64748b; font-weight: 500;">Requests Tracked</span>
-    <span data-testid="stats-count" id="gt-count" style="font-weight: 700; font-size: 16px; color: #0f172a;">0</span>
-  </div>
-
-  <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-    <button 
-      id="gt-bg-toggle" 
-      data-testid="toggle-background"
-      style="
-        flex: 1;
-        padding: 10px 12px;
-        border-radius: 10px;
-        border: 1px solid rgba(22, 163, 74, 0.25);
-        background: rgba(22, 163, 74, 0.1);
-        color: #15803d;
-        font-weight: 600;
-        font-size: 12px;
-        cursor: pointer;
-        transition: all 0.15s ease;
-      "
-    >Background: ON</button>
-
-    <button 
-      id="gt-block-all" 
-      data-testid="btn-block-all"
-      style="
-        flex: 1;
-        padding: 10px 12px;
-        border-radius: 10px;
-        border: 1px solid rgba(220, 38, 38, 0.25);
-        background: rgba(220, 38, 38, 0.1);
-        color: #dc2626;
-        font-weight: 600;
-        font-size: 12px;
-        cursor: pointer;
-        transition: all 0.15s ease;
-      "
-    >Block All</button>
-  </div>
-
-  <button 
-    id="gt-export" 
-    data-testid="btn-dashboard"
-    style="
-      width: 100%;
-      padding: 10px 12px;
-      border-radius: 10px;
-      border: 1px solid rgba(99, 102, 241, 0.25);
-      background: rgba(99, 102, 241, 0.1);
-      color: #4f46e5;
-      font-weight: 600;
-      font-size: 12px;
-      cursor: pointer;
-      margin-bottom: 16px;
-      transition: all 0.15s ease;
-    "
-    onmouseover="this.style.background='rgba(99, 102, 241, 0.15)'"
-    onmouseout="this.style.background='rgba(99, 102, 241, 0.1)'"
-  >Analytics Dashboard</button>
-
-  <div style="font-size: 11px; color: #64748b; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;">
-    Third-Party Connections
-  </div>
-
-  <div 
-    id="gt-domains" 
-    data-testid="domains-table"
-    style="
-      max-height: 260px;
-      overflow-y: auto;
-      border-radius: 12px;
-      background: rgba(0, 0, 0, 0.02);
-      border: 1px solid rgba(0, 0, 0, 0.05);
-    "
-  >
-    <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
-      <thead>
-        <tr style="background: rgba(0, 0, 0, 0.04); position: sticky; top: 0;">
-          <th style="padding: 10px 12px; text-align: left; font-weight: 600; color: #475569;">Site URL</th>
-          <th style="padding: 10px 12px; text-align: left; font-weight: 600; color: #475569;">Company</th>
-          <th style="padding: 10px 12px; text-align: left; font-weight: 600; color: #475569;">Category</th>
-          <th style="padding: 10px 8px; text-align: center; font-weight: 600; color: #475569;">Action</th>
-        </tr>
-      </thead>
-      <tbody id="gt-domains-body"></tbody>
-    </table>
-  </div>
-`;
-
-document.body.appendChild(panel);
-
-/* ---------------- Event Handlers ---------------- */
-
-document.getElementById("gt-close").onclick = () => {
-  panel.style.display = "none";
-  visible = false;
-};
-
-document.getElementById("gt-bg-toggle").onclick = () => {
-  backgroundMode = !backgroundMode;
-  const btn = document.getElementById("gt-bg-toggle");
-  if (backgroundMode) {
-    btn.textContent = "Background: ON";
-    btn.style.borderColor = "rgba(22, 163, 74, 0.25)";
-    btn.style.background = "rgba(22, 163, 74, 0.1)";
-    btn.style.color = "#15803d";
-  } else {
-    btn.textContent = "Background: OFF";
-    btn.style.borderColor = "rgba(220, 38, 38, 0.25)";
-    btn.style.background = "rgba(220, 38, 38, 0.1)";
-    btn.style.color = "#dc2626";
-  }
-};
-
-document.getElementById("gt-block-all").onclick = () => {
-  // Temporarily pause counting to prevent spike
-  window.gtPauseCount = true;
-
-  // Block all third-party connections
-  for (const d of domainCounts.keys()) {
-    if (isThirdParty(d) && !isSafe(d) && !blocked.has(d)) {
-      chrome.runtime.sendMessage({ type: "BLOCK_DOMAIN", domain: d });
-      blocked.add(d);
-    }
-  }
-  render();
-
-  // Resume counting after a short delay
-  setTimeout(() => {
-    window.gtPauseCount = false;
-  }, 500);
-};
-
-document.getElementById("gt-export").onclick = () => {
-  const html = buildPrettyReportHTML();
-  const blob = new Blob([html], { type: "text/html" });
-  const url = URL.createObjectURL(blob);
-
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `privacy-report-${location.hostname}.html`;
-  a.click();
-
-  URL.revokeObjectURL(url);
-};
-
-/* ---------------- Blocking Logic ---------------- */
-
-function block(domain) {
-  chrome.runtime.sendMessage({ type: "BLOCK_DOMAIN", domain });
-  blocked.add(domain);
-  render();
-}
-
-function unblock(domain) {
-  chrome.runtime.sendMessage({ type: "UNBLOCK_DOMAIN", domain });
-  blocked.delete(domain);
-  render();
-}
-
-/* ---------------- Render Functions ---------------- */
-
-// Helper function to get tracker info from KB
-function getTrackerKBInfo(domain) {
-  // Normalize domain - remove www. prefix
-  let normalizedDomain = domain.replace(/^www\./, '');
-
-  // Try exact match first
-  if (trackerKB[normalizedDomain]) {
-    return trackerKB[normalizedDomain];
-  }
-
-  // Generate all possible variations to check
-  const variations = [
-    normalizedDomain,
-    domain,
-    `www.${normalizedDomain}`,
-    `http://${normalizedDomain}/`,
-    `https://${normalizedDomain}/`,
-    `http://${normalizedDomain}`,
-    `https://${normalizedDomain}`,
-    `http://www.${normalizedDomain}/`,
-    `https://www.${normalizedDomain}/`,
-    `http://www.${normalizedDomain}`,
-    `https://www.${normalizedDomain}`
-  ];
-
-  for (const variation of variations) {
-    if (trackerKB[variation]) {
-      return trackerKB[variation];
-    }
-  }
-
-  // Try matching parent domains (e.g., ads.google.com -> google.com)
-  const parts = normalizedDomain.split('.');
-  for (let i = 1; i < parts.length; i++) {
-    const parentDomain = parts.slice(i).join('.');
-    // Skip TLDs alone (like .com, .net)
-    if (parentDomain.split('.').length < 2) continue;
-
-    const parentVariations = [
-      parentDomain,
-      `http://${parentDomain}/`,
-      `https://${parentDomain}/`,
-      `http://${parentDomain}`,
-      `https://${parentDomain}`
-    ];
-
-    for (const v of parentVariations) {
-      if (trackerKB[v]) {
-        return trackerKB[v];
+  // Send to service worker
+  chrome.runtime.sendMessage({
+    type: 'UPDATE_CONTEXT',
+    data: { domSignals }
+  }, (response) => {
+    if (response?.success) {
+      currentContexts = response.contexts || [];
+      if (overlayVisible) {
+        updateContextWarning();
       }
     }
-  }
-
-  // Fallback: Common tracker categorization based on domain patterns
-  const fallbackCategories = {
-    // Google
-    'google': { company: 'Google', category: 'Analytics' },
-    'googleadservices': { company: 'Google', category: 'Advertising' },
-    'googlesyndication': { company: 'Google', category: 'Advertising' },
-    'googletagmanager': { company: 'Google', category: 'Analytics' },
-    'google-analytics': { company: 'Google', category: 'Analytics' },
-    'googleapis': { company: 'Google', category: 'Content' },
-    'gstatic': { company: 'Google', category: 'Content' },
-    'youtube': { company: 'Google', category: 'Content' },
-    'doubleclick': { company: 'Google', category: 'Advertising' },
-    // Facebook/Meta
-    'facebook': { company: 'Meta', category: 'Social' },
-    'fbcdn': { company: 'Meta', category: 'Social' },
-    'fb': { company: 'Meta', category: 'Social' },
-    'instagram': { company: 'Meta', category: 'Social' },
-    'meta': { company: 'Meta', category: 'Social' },
-    // Microsoft
-    'microsoft': { company: 'Microsoft', category: 'Analytics' },
-    'bing': { company: 'Microsoft', category: 'Analytics' },
-    'msn': { company: 'Microsoft', category: 'Content' },
-    'azure': { company: 'Microsoft', category: 'Content' },
-    'clarity': { company: 'Microsoft', category: 'Analytics' },
-    // Amazon
-    'amazon': { company: 'Amazon', category: 'Advertising' },
-    'amazonaws': { company: 'Amazon', category: 'Content' },
-    'cloudfront': { company: 'Amazon', category: 'Content' },
-    // Twitter/X
-    'twitter': { company: 'X Corp', category: 'Social' },
-    'twimg': { company: 'X Corp', category: 'Social' },
-    // Analytics
-    'hotjar': { company: 'Hotjar', category: 'Analytics' },
-    'mixpanel': { company: 'Mixpanel', category: 'Analytics' },
-    'segment': { company: 'Segment', category: 'Analytics' },
-    'amplitude': { company: 'Amplitude', category: 'Analytics' },
-    'heap': { company: 'Heap', category: 'Analytics' },
-    'fullstory': { company: 'FullStory', category: 'Analytics' },
-    'mouseflow': { company: 'Mouseflow', category: 'Analytics' },
-    'crazyegg': { company: 'Crazy Egg', category: 'Analytics' },
-    'optimizely': { company: 'Optimizely', category: 'Analytics' },
-    'newrelic': { company: 'New Relic', category: 'Analytics' },
-    'sentry': { company: 'Sentry', category: 'Analytics' },
-    'logrocket': { company: 'LogRocket', category: 'Analytics' },
-    'smartlook': { company: 'Smartlook', category: 'Analytics' },
-    // Advertising
-    'criteo': { company: 'Criteo', category: 'Advertising' },
-    'taboola': { company: 'Taboola', category: 'Advertising' },
-    'outbrain': { company: 'Outbrain', category: 'Advertising' },
-    'adroll': { company: 'AdRoll', category: 'Advertising' },
-    'pubmatic': { company: 'PubMatic', category: 'Advertising' },
-    'rubiconproject': { company: 'Rubicon', category: 'Advertising' },
-    'openx': { company: 'OpenX', category: 'Advertising' },
-    'appnexus': { company: 'AppNexus', category: 'Advertising' },
-    'adsrvr': { company: 'The Trade Desk', category: 'Advertising' },
-    'adnxs': { company: 'AppNexus', category: 'Advertising' },
-    'moatads': { company: 'Oracle', category: 'Advertising' },
-    'serving-sys': { company: 'Sizmek', category: 'Advertising' },
-    'amazon-adsystem': { company: 'Amazon', category: 'Advertising' },
-    // CDN/Content
-    'cloudflare': { company: 'Cloudflare', category: 'Content' },
-    'akamai': { company: 'Akamai', category: 'Content' },
-    'jsdelivr': { company: 'jsDelivr', category: 'Content' },
-    'cdnjs': { company: 'Cloudflare', category: 'Content' },
-    'unpkg': { company: 'Unpkg', category: 'Content' },
-    'fontawesome': { company: 'Font Awesome', category: 'Content' },
-    'bootstrapcdn': { company: 'Bootstrap', category: 'Content' },
-    // Social
-    'linkedin': { company: 'LinkedIn', category: 'Social' },
-    'pinterest': { company: 'Pinterest', category: 'Social' },
-    'tiktok': { company: 'TikTok', category: 'Social' },
-    'snapchat': { company: 'Snapchat', category: 'Social' },
-    'reddit': { company: 'Reddit', category: 'Social' },
-    // Other
-    'intercom': { company: 'Intercom', category: 'Analytics' },
-    'zendesk': { company: 'Zendesk', category: 'Content' },
-    'hubspot': { company: 'HubSpot', category: 'Analytics' },
-    'salesforce': { company: 'Salesforce', category: 'Analytics' },
-    'stripe': { company: 'Stripe', category: 'Content' },
-    'paypal': { company: 'PayPal', category: 'Content' },
-    'recaptcha': { company: 'Google', category: 'Anti-fraud' },
-    'hcaptcha': { company: 'hCaptcha', category: 'Anti-fraud' }
-  };
-
-  // Check if any fallback pattern matches the domain
-  const lowerDomain = normalizedDomain.toLowerCase();
-  for (const [pattern, info] of Object.entries(fallbackCategories)) {
-    if (lowerDomain.includes(pattern)) {
-      return info;
-    }
-  }
-
-  return null;
-}
-
-// Category color mapping
-const categoryColors = {
-  'Advertising': { bg: '#fef2f2', text: '#dc2626', border: '#fecaca' },
-  'Analytics': { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe' },
-  'Social': { bg: '#f0fdf4', text: '#16a34a', border: '#bbf7d0' },
-  'Content': { bg: '#faf5ff', text: '#7c3aed', border: '#ddd6fe' },
-  'Cryptomining': { bg: '#fef2f2', text: '#991b1b', border: '#fecaca' },
-  'FingerprintingInvasive': { bg: '#fef2f2', text: '#dc2626', border: '#fecaca' },
-  'FingerprintingGeneral': { bg: '#fffbeb', text: '#d97706', border: '#fde68a' },
-  'EmailAggressive': { bg: '#fffbeb', text: '#d97706', border: '#fde68a' },
-  'Anti-fraud': { bg: '#f0fdf4', text: '#16a34a', border: '#bbf7d0' },
-  'Unknown': { bg: '#f1f5f9', text: '#64748b', border: '#e2e8f0' }
-};
-
-function render() {
-  const tbody = document.getElementById("gt-domains-body");
-  tbody.innerHTML = "";
-
-  const sorted = [...domainCounts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 15);
-
-  sorted.forEach(([domain, count]) => {
-    const isBlocked = blocked.has(domain);
-    const sanitizedDomain = domain.replace(/[^a-zA-Z0-9.-]/g, "_");
-
-    // Get tracker info from KB
-    const kbInfo = getTrackerKBInfo(domain);
-    const company = kbInfo?.company || 'Unknown';
-    const category = kbInfo?.category || 'Unknown';
-    const categoryStyle = categoryColors[category] || categoryColors.Unknown;
-
-    const row = document.createElement("tr");
-    row.setAttribute("data-testid", `row-${sanitizedDomain}`);
-    row.style = `
-      border-bottom: 1px solid rgba(0, 0, 0, 0.04);
-      transition: background 0.1s ease;
-    `;
-    row.onmouseover = () => row.style.background = "rgba(0, 0, 0, 0.02)";
-    row.onmouseout = () => row.style.background = "transparent";
-
-    row.innerHTML = `
-      <td style="padding: 10px 12px;">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <img src="https://www.google.com/s2/favicons?domain=${domain}&sz=32" 
-               style="width: 16px; height: 16px; border-radius: 3px; flex-shrink: 0;" 
-               onerror="this.style.display='none'" />
-          <span style="font-weight: 500; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${domain}">${domain}</span>
-        </div>
-      </td>
-      <td style="padding: 10px 12px; color: #475569;">
-        <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;" title="${company}">${company}</span>
-      </td>
-      <td style="padding: 10px 12px;">
-        <span style="
-          font-size: 9px; 
-          color: ${categoryStyle.text}; 
-          background: ${categoryStyle.bg};
-          border: 1px solid ${categoryStyle.border};
-          padding: 2px 8px;
-          border-radius: 4px;
-          text-transform: uppercase; 
-          font-weight: 600;
-          white-space: nowrap;
-        ">${category}</span>
-      </td>
-      <td style="padding: 10px 8px; text-align: center;"></td>
-    `;
-
-    // Add block/unblock button to last cell
-    const actionCell = row.querySelector('td:last-child');
-    const blockBtn = document.createElement("button");
-    blockBtn.textContent = isBlocked ? "Unblock" : "Block";
-    blockBtn.setAttribute("data-testid", `toggle-${sanitizedDomain}`);
-    blockBtn.style = `
-      padding: 4px 10px;
-      border-radius: 5px;
-      border: none;
-      cursor: pointer;
-      font-size: 10px;
-      font-weight: 600;
-      transition: all 0.1s ease;
-      ${isBlocked
-        ? "background: #e2e8f0; color: #64748b;"
-        : "background: #dc2626; color: white;"}
-    `;
-    blockBtn.onclick = (e) => {
-      e.stopPropagation();
-      isBlocked ? unblock(domain) : block(domain);
-    };
-    actionCell.appendChild(blockBtn);
-
-    tbody.appendChild(row);
   });
 }
 
-function showExplainer(domain) {
-  const info = getTrackerInfo(domain);
-
-  alert(
-    `${info.name}\n\n` +
-    `Category: ${info.category}\n` +
-    `Risk Level: ${info.risk}\n\n` +
-    `What it does:\n${info.description}\n\n` +
-    `Data collected:\n- ${info.dataCollected.join("\n- ")}\n\n` +
-    `Legal context:\n${info.regulation}`
-  );
+// Request tracker data from service worker
+function requestTrackerUpdate() {
+  chrome.runtime.sendMessage({ type: 'GET_TRACKERS' }, (response) => {
+    if (response?.success) {
+      trackers = response.trackers || [];
+      stats = response.stats || { total: 0, allowed: 0, restricted: 0, sandboxed: 0, blocked: 0 };
+      currentContexts = response.contexts || [];
+      
+      if (overlayVisible) {
+        renderTrackerList();
+        updateStats();
+      } else if (backgroundMode) {
+        checkForSuspiciousActivity();
+      }
+    }
+  });
 }
 
-function showAlert(domain) {
-  if (document.getElementById("gt-alert")) return;
+// Check for suspicious activity in background mode
+function checkForSuspiciousActivity() {
+  const highRiskTrackers = trackers.filter(t => t.riskScore >= 60);
+  
+  if (highRiskTrackers.length > 0 && Date.now() - lastUpdate > 10000) {
+    showBackgroundAlert(highRiskTrackers.length);
+    lastUpdate = Date.now();
+  }
+}
 
-  const alertBox = document.createElement("div");
-  alertBox.id = "gt-alert";
-  alertBox.setAttribute("data-testid", "alert-notification");
-  alertBox.style = `
+// Show subtle background alert
+function showBackgroundAlert(count) {
+  const existing = document.getElementById('himt-bg-alert');
+  if (existing) existing.remove();
+
+  const alert = document.createElement('div');
+  alert.id = 'himt-bg-alert';
+  alert.setAttribute('data-testid', 'bg-alert');
+  alert.style.cssText = `
     position: fixed;
     bottom: 20px;
     right: 20px;
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    background: rgba(255, 255, 255, 0.92);
-    color: #1e293b;
-    padding: 16px 20px;
-    border-radius: 14px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
-    z-index: 999999;
-    font-size: 13px;
+    background: rgba(239, 68, 68, 0.95);
+    backdrop-filter: blur(10px);
+    color: white;
+    padding: 12px 16px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 999998;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    max-width: 320px;
+    font-size: 13px;
+    cursor: pointer;
+    animation: slideIn 0.3s ease;
   `;
+  
+  alert.innerHTML = `
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <span style="font-size: 18px;">⚠️</span>
+      <span><strong>${count}</strong> high-risk tracker${count > 1 ? 's' : ''} detected</span>
+    </div>
+  `;
+  
+  alert.addEventListener('click', () => {
+    alert.remove();
+    showOverlay();
+  });
+  
+  document.body.appendChild(alert);
+  
+  setTimeout(() => {
+    alert.style.animation = 'slideOut 0.3s ease';
+    setTimeout(() => alert.remove(), 300);
+  }, 5000);
+}
 
-  alertBox.innerHTML = `
-    <div style="font-weight: 600; margin-bottom: 6px; color: #dc2626;">Suspicious Tracker Detected</div>
-    <div style="color: #64748b; margin-bottom: 12px; font-size: 12px;">${domain}</div>
-    <div style="display: flex; gap: 8px;">
-      <button 
-        id="gt-alert-open" 
-        data-testid="alert-inspect"
-        style="
-          flex: 1;
-          padding: 8px 12px;
-          border-radius: 8px;
-          border: 1px solid rgba(37, 99, 235, 0.25);
-          background: rgba(37, 99, 235, 0.1);
-          color: #1d4ed8;
-          font-weight: 600;
-          font-size: 12px;
-          cursor: pointer;
-        "
-      >Inspect</button>
-      <button 
-        id="gt-alert-dismiss" 
-        data-testid="alert-dismiss"
-        style="
-          flex: 1;
-          padding: 8px 12px;
-          border-radius: 8px;
-          border: 1px solid rgba(0, 0, 0, 0.08);
-          background: rgba(0, 0, 0, 0.03);
-          color: #475569;
-          font-weight: 500;
-          font-size: 12px;
-          cursor: pointer;
-        "
-      >Dismiss</button>
+// Toggle overlay visibility
+function toggleOverlay() {
+  overlayVisible ? hideOverlay() : showOverlay();
+}
+
+// Show overlay
+function showOverlay() {
+  overlayVisible = true;
+  createOverlay();
+  requestTrackerUpdate();
+}
+
+// Hide overlay
+function hideOverlay() {
+  overlayVisible = false;
+  const panel = document.getElementById('himt-panel');
+  if (panel) panel.remove();
+}
+
+// Create main overlay panel
+function createOverlay() {
+  // Remove existing
+  const existing = document.getElementById('himt-panel');
+  if (existing) existing.remove();
+
+  const panel = document.createElement('div');
+  panel.id = 'himt-panel';
+  panel.setAttribute('data-testid', 'panel-main');
+  panel.className = 'himt-panel';
+  
+  panel.innerHTML = `
+    <div class="himt-header">
+      <div class="himt-logo">
+        <div class="himt-logo-icon">🔍</div>
+        <div class="himt-logo-text">
+          <div class="himt-title">How I Met Your Tracker</div>
+          <div class="himt-subtitle">Privacy Protection Active</div>
+        </div>
+      </div>
+      <button class="himt-close-btn" id="himt-close" data-testid="btn-close">✕</button>
+    </div>
+
+    <div id="himt-context-warning" class="himt-context-warning" style="display: none;">
+      <div class="himt-warning-icon">⚠️</div>
+      <div class="himt-warning-content">
+        <div class="himt-warning-title">Critical Context Detected</div>
+        <div class="himt-warning-text" id="himt-context-text"></div>
+        <div class="himt-warning-note">Blocking is limited to prevent breaking functionality</div>
+      </div>
+    </div>
+
+    <div class="himt-stats-grid" id="himt-stats">
+      <div class="himt-stat-card">
+        <div class="himt-stat-label">Total Requests</div>
+        <div class="himt-stat-value" data-testid="stats-count" id="himt-total">0</div>
+      </div>
+      <div class="himt-stat-card himt-stat-allowed">
+        <div class="himt-stat-label">Allowed</div>
+        <div class="himt-stat-value" id="himt-allowed">0</div>
+      </div>
+      <div class="himt-stat-card himt-stat-restricted">
+        <div class="himt-stat-label">Restricted</div>
+        <div class="himt-stat-value" id="himt-restricted">0</div>
+      </div>
+      <div class="himt-stat-card himt-stat-sandboxed">
+        <div class="himt-stat-label">Sandboxed</div>
+        <div class="himt-stat-value" id="himt-sandboxed">0</div>
+      </div>
+      <div class="himt-stat-card himt-stat-blocked">
+        <div class="himt-stat-label">Blocked</div>
+        <div class="himt-stat-value" id="himt-blocked">0</div>
+      </div>
+    </div>
+
+    <div class="himt-controls">
+      <button class="himt-btn himt-btn-secondary" id="himt-bg-toggle" data-testid="toggle-background">
+        <span class="himt-btn-icon">${backgroundMode ? '👁️' : '👁️‍🗨️'}</span>
+        <span class="himt-btn-text">${backgroundMode ? 'Background Mode ON' : 'Background Mode OFF'}</span>
+      </button>
+      <button class="himt-btn himt-btn-primary" id="himt-export" data-testid="btn-export">
+        <span class="himt-btn-icon">📊</span>
+        <span class="himt-btn-text">Export Report</span>
+      </button>
+    </div>
+
+    <div class="himt-tracker-list" id="himt-tracker-list">
+      <div class="himt-empty-state">
+        <div class="himt-empty-icon">🔒</div>
+        <div class="himt-empty-text">No third-party trackers detected</div>
+      </div>
     </div>
   `;
 
-  document.body.appendChild(alertBox);
+  document.body.appendChild(panel);
 
-  document.getElementById("gt-alert-open").onclick = () => {
-    panel.style.display = "block";
-    visible = true;
-    alertBox.remove();
-  };
+  // Attach event listeners
+  document.getElementById('himt-close').addEventListener('click', hideOverlay);
+  document.getElementById('himt-bg-toggle').addEventListener('click', toggleBackgroundMode);
+  document.getElementById('himt-export').addEventListener('click', exportReport);
 
-  document.getElementById("gt-alert-dismiss").onclick = () => alertBox.remove();
-  setTimeout(() => alertBox.remove(), 7000);
+  // Initial render
+  renderTrackerList();
+  updateStats();
+  updateContextWarning();
 }
 
-/* ---------------- Report Generation ---------------- */
+// Update statistics display
+function updateStats() {
+  const elements = {
+    total: document.getElementById('himt-total'),
+    allowed: document.getElementById('himt-allowed'),
+    restricted: document.getElementById('himt-restricted'),
+    sandboxed: document.getElementById('himt-sandboxed'),
+    blocked: document.getElementById('himt-blocked')
+  };
 
-function buildPrettyReportHTML() {
-  const topDomains = [...domainCounts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10)
-    .map(([domain, count]) => {
-      const status = blocked.has(domain) ? "Blocked" : "Allowed";
-      const risk = calculateRiskLevel(domain, count);
-      return `<tr>
-        <td style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb;">${domain}</td>
-        <td style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb;">${count}</td>
-        <td style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb;">
-          <span style="
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: 600;
-            ${risk === 'HIGH' ? 'background: #fef2f2; color: #dc2626;' :
-          risk === 'MEDIUM' ? 'background: #fffbeb; color: #d97706;' :
-            'background: #f0fdf4; color: #16a34a;'}
-          ">${risk}</span>
-        </td>
-        <td style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb;">${status}</td>
-      </tr>`;
-    })
-    .join("");
+  if (elements.total) elements.total.textContent = stats.total || 0;
+  if (elements.allowed) elements.allowed.textContent = stats.allowed || 0;
+  if (elements.restricted) elements.restricted.textContent = stats.restricted || 0;
+  if (elements.sandboxed) elements.sandboxed.textContent = stats.sandboxed || 0;
+  if (elements.blocked) elements.blocked.textContent = stats.blocked || 0;
+}
 
-  return `<!DOCTYPE html>
-<html lang="en">
+// Update context warning
+function updateContextWarning() {
+  const warning = document.getElementById('himt-context-warning');
+  const warningText = document.getElementById('himt-context-text');
+  
+  if (!warning || !warningText) return;
+
+  if (currentContexts.length > 0) {
+    warning.style.display = 'flex';
+    const contextLabels = {
+      'payment': 'Payment Processing',
+      'checkout': 'Checkout Flow',
+      'login': 'Login/Authentication'
+    };
+    const labels = currentContexts.map(c => contextLabels[c] || c).join(', ');
+    warningText.textContent = labels;
+  } else {
+    warning.style.display = 'none';
+  }
+}
+
+// Render tracker list
+function renderTrackerList() {
+  const container = document.getElementById('himt-tracker-list');
+  if (!container) return;
+
+  if (trackers.length === 0) {
+    container.innerHTML = `
+      <div class="himt-empty-state">
+        <div class="himt-empty-icon">🔒</div>
+        <div class="himt-empty-text">No third-party trackers detected</div>
+      </div>
+    `;
+    return;
+  }
+
+  // Sort by risk score (highest first)
+  const sortedTrackers = [...trackers].sort((a, b) => b.riskScore - a.riskScore);
+
+  container.innerHTML = sortedTrackers.map(tracker => createTrackerCard(tracker)).join('');
+
+  // Attach event listeners to tracker cards
+  sortedTrackers.forEach(tracker => {
+    attachTrackerListeners(tracker);
+  });
+}
+
+// Create tracker card HTML
+function createTrackerCard(tracker) {
+  const { info, riskScore, enforcementMode, requestCount, explanation, wasOverridden, deferred } = tracker;
+  
+  const modeColors = {
+    'allow': '#10b981',
+    'restrict': '#f59e0b',
+    'sandbox': '#ef4444',
+    'block': '#7f1d1d'
+  };
+
+  const riskLevels = {
+    LOW: { color: '#10b981', label: 'Low Risk' },
+    MEDIUM: { color: '#f59e0b', label: 'Medium Risk' },
+    HIGH: { color: '#ef4444', label: 'High Risk' },
+    CRITICAL: { color: '#7f1d1d', label: 'Critical Risk' }
+  };
+
+  const riskLevel = explanation?.riskLevel || 'LOW';
+  const riskConfig = riskLevels[riskLevel] || riskLevels.LOW;
+
+  return `
+    <div class="himt-tracker-card" data-domain="${info.domain}" data-testid="card-${info.domain}">
+      <div class="himt-tracker-header">
+        <div class="himt-tracker-info">
+          <div class="himt-tracker-domain">${info.domain}</div>
+          <div class="himt-tracker-meta">${info.owner} • ${info.category}</div>
+        </div>
+        <div class="himt-tracker-badge" style="background-color: ${modeColors[enforcementMode]}">
+          ${enforcementMode.toUpperCase()}${deferred ? ' (DEFERRED)' : ''}${wasOverridden ? ' *' : ''}
+        </div>
+      </div>
+
+      <div class="himt-tracker-description">${info.description}</div>
+
+      <div class="himt-tracker-metrics">
+        <div class="himt-metric">
+          <div class="himt-metric-label">Risk Score</div>
+          <div class="himt-metric-value" style="color: ${riskConfig.color}">${riskScore}/100</div>
+        </div>
+        <div class="himt-metric">
+          <div class="himt-metric-label">Risk Level</div>
+          <div class="himt-metric-value" style="color: ${riskConfig.color}">${riskConfig.label}</div>
+        </div>
+        <div class="himt-metric">
+          <div class="himt-metric-label">Requests</div>
+          <div class="himt-metric-value">${requestCount}</div>
+        </div>
+      </div>
+
+      <div class="himt-tracker-details" id="details-${info.domain}" style="display: none;">
+        <div class="himt-detail-section">
+          <div class="himt-detail-label">Data Collected</div>
+          <div class="himt-detail-value">${info.dataCollected.join(', ')}</div>
+        </div>
+        <div class="himt-detail-section">
+          <div class="himt-detail-label">Regulation</div>
+          <div class="himt-detail-value">${info.regulation}</div>
+        </div>
+        <div class="himt-detail-section">
+          <div class="himt-detail-label">Impact</div>
+          <div class="himt-detail-value">${explanation?.impact || 'Unknown'}</div>
+        </div>
+      </div>
+
+      <div class="himt-tracker-actions">
+        <button class="himt-action-btn himt-action-details" data-domain="${info.domain}">
+          <span class="himt-btn-icon">ℹ️</span>
+          <span>Details</span>
+        </button>
+        <button class="himt-action-btn himt-action-allow" data-domain="${info.domain}" data-mode="allow">
+          <span class="himt-btn-icon">✓</span>
+          <span>Allow</span>
+        </button>
+        <button class="himt-action-btn himt-action-restrict" data-domain="${info.domain}" data-mode="restrict">
+          <span class="himt-btn-icon">⚠</span>
+          <span>Restrict</span>
+        </button>
+        <button class="himt-action-btn himt-action-sandbox" data-domain="${info.domain}" data-mode="sandbox">
+          <span class="himt-btn-icon">⊘</span>
+          <span>Sandbox</span>
+        </button>
+        <button class="himt-action-btn himt-action-block" data-domain="${info.domain}" data-mode="block">
+          <span class="himt-btn-icon">✕</span>
+          <span>Block</span>
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+// Attach event listeners to tracker card
+function attachTrackerListeners(tracker) {
+  const domain = tracker.info.domain;
+
+  // Details toggle
+  const detailsBtn = document.querySelector(`.himt-action-details[data-domain="${domain}"]`);
+  if (detailsBtn) {
+    detailsBtn.addEventListener('click', () => toggleDetails(domain));
+  }
+
+  // Mode buttons
+  const modeButtons = document.querySelectorAll(`.himt-tracker-card[data-domain="${domain}"] button[data-mode]`);
+  modeButtons.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const mode = e.currentTarget.dataset.mode;
+      handleUserOverride(domain, mode);
+    });
+  });
+}
+
+// Toggle tracker details
+function toggleDetails(domain) {
+  const details = document.getElementById(`details-${domain}`);
+  const btn = document.querySelector(`.himt-action-details[data-domain="${domain}"]`);
+  
+  if (details && btn) {
+    const isVisible = details.style.display !== 'none';
+    details.style.display = isVisible ? 'none' : 'block';
+    btn.querySelector('span:last-child').textContent = isVisible ? 'Details' : 'Hide';
+  }
+}
+
+// Handle user override
+function handleUserOverride(domain, mode) {
+  chrome.runtime.sendMessage({
+    type: 'USER_OVERRIDE',
+    data: { domain, mode, scope: 'tab' }
+  }, (response) => {
+    if (response?.success) {
+      // Update local data
+      const tracker = trackers.find(t => t.info.domain === domain);
+      if (tracker) {
+        tracker.enforcementMode = mode;
+        tracker.wasOverridden = true;
+      }
+      renderTrackerList();
+      
+      // Show feedback
+      showFeedback(`${domain} set to ${mode.toUpperCase()}`);
+    } else {
+      showFeedback('Failed to update tracker', true);
+    }
+  });
+}
+
+// Toggle background mode
+function toggleBackgroundMode() {
+  backgroundMode = !backgroundMode;
+  const btn = document.getElementById('himt-bg-toggle');
+  if (btn) {
+    btn.querySelector('.himt-btn-icon').textContent = backgroundMode ? '👁️' : '👁️‍🗨️';
+    btn.querySelector('.himt-btn-text').textContent = backgroundMode ? 'Background Mode ON' : 'Background Mode OFF';
+  }
+  showFeedback(`Background mode ${backgroundMode ? 'enabled' : 'disabled'}`);
+}
+
+// Export privacy report
+function exportReport() {
+  chrome.runtime.sendMessage({ type: 'EXPORT_REPORT' }, (response) => {
+    if (response?.success && response.report) {
+      const report = response.report;
+      
+      // Generate HTML report
+      const html = `
+<!DOCTYPE html>
+<html>
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Privacy Report - ${location.hostname}</title>
+  <title>Privacy Report - ${new Date().toLocaleDateString()}</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { 
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-      padding: 40px; 
-      color: #1e293b;
-      background: #f8fafc;
-      line-height: 1.6;
-    }
-    .container { max-width: 800px; margin: 0 auto; }
-    h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; color: #0f172a; }
-    .subtitle { color: #64748b; margin-bottom: 32px; }
-    .card { 
-      background: white; 
-      border-radius: 16px; 
-      padding: 24px; 
-      margin-bottom: 24px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-      border: 1px solid rgba(0, 0, 0, 0.05);
-    }
-    .card h2 { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #334155; }
-    .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-    .metric { text-align: center; padding: 20px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0; }
-    .metric-value { font-size: 36px; font-weight: 700; color: #0f172a; }
-    .metric-label { font-size: 12px; color: #64748b; margin-top: 4px; font-weight: 500; }
-    table { width: 100%; border-collapse: collapse; }
-    th { 
-      text-align: left; 
-      padding: 12px 16px; 
-      background: #f8fafc; 
-      font-size: 11px; 
-      text-transform: uppercase; 
-      letter-spacing: 0.05em;
-      color: #64748b;
-      font-weight: 600;
-    }
-    footer { margin-top: 32px; font-size: 12px; color: #94a3b8; text-align: center; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 40px; background: #f9fafb; }
+    .container { max-width: 900px; margin: 0 auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    h1 { color: #111827; margin-bottom: 8px; }
+    .timestamp { color: #6b7280; margin-bottom: 32px; }
+    .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 32px; }
+    .stat { background: #f9fafb; padding: 16px; border-radius: 8px; text-align: center; }
+    .stat-label { color: #6b7280; font-size: 13px; margin-bottom: 4px; }
+    .stat-value { color: #111827; font-size: 24px; font-weight: 700; }
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+    th, td { text-align: left; padding: 12px; border-bottom: 1px solid #e5e7eb; }
+    th { background: #f9fafb; font-weight: 600; color: #374151; }
+    .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; color: white; }
+    .badge-allow { background: #10b981; }
+    .badge-restrict { background: #f59e0b; }
+    .badge-sandbox { background: #ef4444; }
+    .badge-block { background: #7f1d1d; }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>Privacy Report</h1>
-    <div class="subtitle">Site: ${location.hostname} | Generated: ${new Date().toLocaleString()}</div>
+    <h1>Privacy Tracking Report</h1>
+    <div class="timestamp">Generated on ${new Date(report.timestamp).toLocaleString()}</div>
     
-    <div class="card">
-      <h2>Summary</h2>
-      <div class="metrics">
-        <div class="metric">
-          <div class="metric-value">${total}</div>
-          <div class="metric-label">Total Requests</div>
-        </div>
-        <div class="metric">
-          <div class="metric-value">${domainCounts.size}</div>
-          <div class="metric-label">Third-Party Domains</div>
-        </div>
-        <div class="metric">
-          <div class="metric-value">${blocked.size}</div>
-          <div class="metric-label">Blocked Trackers</div>
-        </div>
+    <h2>Summary Statistics</h2>
+    <div class="stats">
+      <div class="stat"><div class="stat-label">Total</div><div class="stat-value">${report.stats.total}</div></div>
+      <div class="stat"><div class="stat-label">Allowed</div><div class="stat-value">${report.stats.allowed}</div></div>
+      <div class="stat"><div class="stat-label">Restricted</div><div class="stat-value">${report.stats.restricted}</div></div>
+      <div class="stat"><div class="stat-label">Sandboxed</div><div class="stat-value">${report.stats.sandboxed}</div></div>
+      <div class="stat"><div class="stat-label">Blocked</div><div class="stat-value">${report.stats.blocked}</div></div>
+    </div>
+    
+    ${report.contexts.length > 0 ? `
+      <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 16px; margin-bottom: 32px; border-radius: 4px;">
+        <strong>Critical Context:</strong> ${report.contexts.join(', ')}
       </div>
-    </div>
-
-    <div class="card">
-      <h2>Top Third-Party Connections</h2>
-      <table>
-        <thead>
+    ` : ''}
+    
+    <h2>Detected Trackers</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Domain</th>
+          <th>Owner</th>
+          <th>Category</th>
+          <th>Risk</th>
+          <th>Requests</th>
+          <th>Mode</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${report.trackers.map(t => `
           <tr>
-            <th>Domain</th>
-            <th>Requests</th>
-            <th>Risk</th>
-            <th>Status</th>
+            <td>${t.domain}</td>
+            <td>${t.owner}</td>
+            <td>${t.category}</td>
+            <td>${t.riskScore}/100</td>
+            <td>${t.requestCount}</td>
+            <td><span class="badge badge-${t.enforcementMode}">${t.enforcementMode.toUpperCase()}</span></td>
           </tr>
-        </thead>
-        <tbody>
-          ${topDomains}
-        </tbody>
-      </table>
-    </div>
-
-    <div class="card">
-      <h2>Why This Matters</h2>
-      <p style="color: #475569;">
-        Many websites embed third-party services that track your behavior across the web. 
-        This report shows which domains are receiving data from your browsing session 
-        and their associated privacy risk levels.
-      </p>
-    </div>
-
-    <footer>
-      Generated locally by GhostTraffic. No data was sent to any external server.
-    </footer>
+        `).join('')}
+      </tbody>
+    </table>
   </div>
 </body>
-</html>`;
+</html>
+      `;
+
+      // Download report
+      const blob = new Blob([html], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `privacy-report-${Date.now()}.html`;
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      showFeedback('Report exported successfully');
+    } else {
+      showFeedback('Failed to export report', true);
+    }
+  });
 }
 
-/* ---------------- Message Handling ---------------- */
+// Show feedback toast
+function showFeedback(message, isError = false) {
+  const existing = document.getElementById('himt-feedback');
+  if (existing) existing.remove();
 
-chrome.runtime.onMessage.addListener(msg => {
-  if (msg.type === "TOGGLE_OVERLAY") {
-    visible = !visible;
-    panel.style.display = visible ? "block" : "none";
-  }
+  const feedback = document.createElement('div');
+  feedback.id = 'himt-feedback';
+  feedback.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: ${isError ? 'rgba(239, 68, 68, 0.95)' : 'rgba(16, 185, 129, 0.95)'};
+    backdrop-filter: blur(10px);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 9999999;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 13px;
+    animation: slideUp 0.3s ease;
+  `;
+  feedback.textContent = message;
+  
+  document.body.appendChild(feedback);
+  
+  setTimeout(() => {
+    feedback.style.animation = 'slideDown 0.3s ease';
+    setTimeout(() => feedback.remove(), 300);
+  }, 2000);
+}
 
-  if (msg.type === "GHOST_TRAFFIC") {
-    // Skip counting if paused (during Block All operation)
-    if (window.gtPauseCount) return;
+// Listen for messages from service worker
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  const { type, tracker, stats: newStats, contexts } = message;
 
-    const d = getDomain(msg.payload.url);
-    if (!d) return;
+  switch (type) {
+    case 'TOGGLE_OVERLAY':
+      toggleOverlay();
+      break;
 
-    total++;
-    document.getElementById("gt-count").textContent = total;
-    domainCounts.set(d, (domainCounts.get(d) || 0) + 1);
+    case 'TRACKER_DETECTED':
+      // Update in background
+      if (!overlayVisible && backgroundMode) {
+        requestTrackerUpdate();
+      }
+      break;
 
-    if (visible) render();
-
-    if (backgroundMode && isThirdParty(d) && (isSuspicious(d) || domainCounts.size > 12 || isSpike())) {
-      showAlert(d);
-    }
+    case 'CONTEXT_CHANGED':
+      if (contexts) {
+        currentContexts = contexts;
+        if (overlayVisible) {
+          updateContextWarning();
+        }
+      }
+      break;
   }
 });
+
+// Add CSS animations
+const style = document.createElement('style');
+style.textContent = `
+  @keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  @keyframes slideOut {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(100%); opacity: 0; }
+  }
+  @keyframes slideUp {
+    from { transform: translate(-50%, 20px); opacity: 0; }
+    to { transform: translate(-50%, 0); opacity: 1; }
+  }
+  @keyframes slideDown {
+    from { transform: translate(-50%, 0); opacity: 1; }
+    to { transform: translate(-50%, 20px); opacity: 0; }
+  }
+`;
+document.head.appendChild(style);
+
+console.log('[HIMT Content] Content script loaded');
+

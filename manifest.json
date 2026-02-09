@@ -1,22 +1,26 @@
 {
   "manifest_version": 3,
   "name": "How I Met Your Tracker",
-  "version": "1.0.0",
-  "description": "Make invisible web tracking visible and controllable.",
+  "version": "2.0.0",
+  "description": "Makes invisible web tracking visible, explainable, and consent-based with adaptive prevention",
   "permissions": [
-    "webRequest",
     "declarativeNetRequest",
     "declarativeNetRequestWithHostAccess",
-    "tabs"
+    "webRequest",
+    "webNavigation",
+    "storage",
+    "tabs",
+    "scripting"
   ],
   "host_permissions": [
     "<all_urls>"
   ],
   "background": {
-    "service_worker": "service_worker.js"
+    "service_worker": "service_worker.js",
+    "type": "module"
   },
   "action": {
-    "default_title": "GhostTraffic"
+    "default_title": "How I Met Your Tracker"
   },
   "content_scripts": [
     {
@@ -26,6 +30,9 @@
       "js": [
         "content_script.js"
       ],
+      "css": [
+        "ui/styles.css"
+      ],
       "run_at": "document_idle"
     }
   ],
@@ -33,11 +40,16 @@
     {
       "resources": [
         "assets/*",
-        "tracker_kb.json"
+        "tracker_kb.json",
+        "policies.json"
       ],
       "matches": [
         "<all_urls>"
       ]
     }
-  ]
+  ],
+  "icons": {
+    "16": "assets/icon16.png",
+    "48": "assets/icon48.png"
+  }
 }
