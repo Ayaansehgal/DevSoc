@@ -38,7 +38,21 @@
 }
 
 .himt-logo-icon {
-  font-size: 32px !important;
+  width: 32px !important;
+  height: 32px !important;
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%) !important;
+  border-radius: 8px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.himt-logo-icon::after {
+  content: '' !important;
+  width: 14px !important;
+  height: 16px !important;
+  background: white !important;
+  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%) !important;
 }
 
 .himt-logo-text {
@@ -89,7 +103,17 @@
 }
 
 .himt-warning-icon {
-  font-size: 20px !important;
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  background: #f59e0b !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-weight: 700 !important;
+  font-size: 16px !important;
+  color: white !important;
 }
 
 .himt-warning-content {
@@ -151,10 +175,21 @@
   color: #0f172a !important;
 }
 
-.himt-stat-allowed .himt-stat-value { color: #10b981 !important; }
-.himt-stat-restricted .himt-stat-value { color: #f59e0b !important; }
-.himt-stat-sandboxed .himt-stat-value { color: #ef4444 !important; }
-.himt-stat-blocked .himt-stat-value { color: #7f1d1d !important; }
+.himt-stat-allowed .himt-stat-value {
+  color: #10b981 !important;
+}
+
+.himt-stat-restricted .himt-stat-value {
+  color: #f59e0b !important;
+}
+
+.himt-stat-sandboxed .himt-stat-value {
+  color: #ef4444 !important;
+}
+
+.himt-stat-blocked .himt-stat-value {
+  color: #7f1d1d !important;
+}
 
 /* Controls */
 .himt-controls {
@@ -236,11 +271,6 @@
 .himt-empty-state {
   text-align: center !important;
   padding: 48px 20px !important;
-}
-
-.himt-empty-icon {
-  font-size: 48px !important;
-  margin-bottom: 12px !important;
 }
 
 .himt-empty-text {
@@ -425,7 +455,7 @@
     right: 8px !important;
     left: 8px !important;
   }
-  
+
   .himt-stats-grid {
     grid-template-columns: repeat(3, 1fr) !important;
   }

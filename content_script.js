@@ -14,12 +14,12 @@ let lastUpdate = 0;
   detectDOMContexts();
   requestTrackerUpdate();
   
-  // Periodic updates
+  // Periodic updatesī
   setInterval(detectDOMContexts, 5000);
   setInterval(requestTrackerUpdate, 3000);
 })();
 
-// Detect DOM-based contexts (checkout, login forms)
+// Detect DOM-based contexts (checkout, login forms)ī
 function detectDOMContexts() {
   const signals = {
     checkout: document.querySelectorAll(
@@ -104,7 +104,7 @@ function showBackgroundAlert(count) {
   
   alert.innerHTML = `
     <div style="display: flex; align-items: center; gap: 8px;">
-      <span style="font-size: 18px;">⚠️</span>
+      <span style="font-weight: bold;">!</span>
       <span><strong>${count}</strong> high-risk tracker${count > 1 ? 's' : ''} detected</span>
     </div>
   `;
@@ -155,17 +155,17 @@ function createOverlay() {
   panel.innerHTML = `
     <div class="himt-header">
       <div class="himt-logo">
-        <div class="himt-logo-icon">🔍</div>
+        <div class="himt-logo-icon"></div>
         <div class="himt-logo-text">
           <div class="himt-title">How I Met Your Tracker</div>
           <div class="himt-subtitle">Privacy Protection Active</div>
         </div>
       </div>
-      <button class="himt-close-btn" id="himt-close" data-testid="btn-close">✕</button>
+      <button class="himt-close-btn" id="himt-close" data-testid="btn-close">×</button>
     </div>
 
     <div id="himt-context-warning" class="himt-context-warning" style="display: none;">
-      <div class="himt-warning-icon">⚠️</div>
+      <div class="himt-warning-icon">!</div>
       <div class="himt-warning-content">
         <div class="himt-warning-title">Critical Context Detected</div>
         <div class="himt-warning-text" id="himt-context-text"></div>
@@ -198,18 +198,15 @@ function createOverlay() {
 
     <div class="himt-controls">
       <button class="himt-btn himt-btn-secondary" id="himt-bg-toggle" data-testid="toggle-background">
-        <span class="himt-btn-icon">${backgroundMode ? '👁️' : '👁️‍🗨️'}</span>
         <span class="himt-btn-text">${backgroundMode ? 'Background Mode ON' : 'Background Mode OFF'}</span>
       </button>
       <button class="himt-btn himt-btn-primary" id="himt-export" data-testid="btn-export">
-        <span class="himt-btn-icon">📊</span>
         <span class="himt-btn-text">Export Report</span>
       </button>
     </div>
 
     <div class="himt-tracker-list" id="himt-tracker-list">
       <div class="himt-empty-state">
-        <div class="himt-empty-icon">🔒</div>
         <div class="himt-empty-text">No third-party trackers detected</div>
       </div>
     </div>
@@ -266,6 +263,9 @@ function updateContextWarning() {
   }
 }
 
+// Track expanded details state
+let expandedDetails = new Set();
+
 // Render tracker list
 function renderTrackerList() {
   const container = document.getElementById('himt-tracker-list');
@@ -274,7 +274,6 @@ function renderTrackerList() {
   if (trackers.length === 0) {
     container.innerHTML = `
       <div class="himt-empty-state">
-        <div class="himt-empty-icon">🔒</div>
         <div class="himt-empty-text">No third-party trackers detected</div>
       </div>
     `;
@@ -342,7 +341,7 @@ function createTrackerCard(tracker) {
         </div>
       </div>
 
-      <div class="himt-tracker-details" id="details-${info.domain}" style="display: none;">
+      <div class="himt-tracker-details" id="details-${info.domain}" style="display: ${expandedDetails.has(info.domain) ? 'block' : 'none'};">
         <div class="himt-detail-section">
           <div class="himt-detail-label">Data Collected</div>
           <div class="himt-detail-value">${info.dataCollected.join(', ')}</div>
@@ -359,23 +358,18 @@ function createTrackerCard(tracker) {
 
       <div class="himt-tracker-actions">
         <button class="himt-action-btn himt-action-details" data-domain="${info.domain}">
-          <span class="himt-btn-icon">ℹ️</span>
-          <span>Details</span>
+          <span>${expandedDetails.has(info.domain) ? 'Hide' : 'Details'}</span>
         </button>
         <button class="himt-action-btn himt-action-allow" data-domain="${info.domain}" data-mode="allow">
-          <span class="himt-btn-icon">✓</span>
           <span>Allow</span>
         </button>
         <button class="himt-action-btn himt-action-restrict" data-domain="${info.domain}" data-mode="restrict">
-          <span class="himt-btn-icon">⚠</span>
           <span>Restrict</span>
         </button>
         <button class="himt-action-btn himt-action-sandbox" data-domain="${info.domain}" data-mode="sandbox">
-          <span class="himt-btn-icon">⊘</span>
           <span>Sandbox</span>
         </button>
         <button class="himt-action-btn himt-action-block" data-domain="${info.domain}" data-mode="block">
-          <span class="himt-btn-icon">✕</span>
           <span>Block</span>
         </button>
       </div>
@@ -411,7 +405,14 @@ function toggleDetails(domain) {
   if (details && btn) {
     const isVisible = details.style.display !== 'none';
     details.style.display = isVisible ? 'none' : 'block';
-    btn.querySelector('span:last-child').textContent = isVisible ? 'Details' : 'Hide';
+    btn.querySelector('span').textContent = isVisible ? 'Details' : 'Hide';
+    
+    // Persist the expanded state
+    if (isVisible) {
+      expandedDetails.delete(domain);
+    } else {
+      expandedDetails.add(domain);
+    }
   }
 }
 
@@ -443,7 +444,6 @@ function toggleBackgroundMode() {
   backgroundMode = !backgroundMode;
   const btn = document.getElementById('himt-bg-toggle');
   if (btn) {
-    btn.querySelector('.himt-btn-icon').textContent = backgroundMode ? '👁️' : '👁️‍🗨️';
     btn.querySelector('.himt-btn-text').textContent = backgroundMode ? 'Background Mode ON' : 'Background Mode OFF';
   }
   showFeedback(`Background mode ${backgroundMode ? 'enabled' : 'disabled'}`);
