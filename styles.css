@@ -1,0 +1,432 @@
+/* How I Met Your Tracker - Glassmorphic UI Styles */
+
+/* Main Panel */
+.himt-panel {
+  position: fixed !important;
+  top: 16px !important;
+  right: 16px !important;
+  width: 520px !important;
+  max-height: calc(100vh - 32px) !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+  background: rgba(255, 255, 255, 0.85) !important;
+  color: #1e293b !important;
+  z-index: 999999 !important;
+  border-radius: 20px !important;
+  padding: 20px !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', sans-serif !important;
+  font-size: 13px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.05) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  line-height: 1.5 !important;
+  overflow: hidden !important;
+}
+
+/* Header */
+.himt-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  margin-bottom: 16px !important;
+}
+
+.himt-logo {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+}
+
+.himt-logo-icon {
+  font-size: 32px !important;
+}
+
+.himt-logo-text {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.himt-title {
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  color: #0f172a !important;
+}
+
+.himt-subtitle {
+  font-size: 11px !important;
+  color: #64748b !important;
+  font-weight: 500 !important;
+}
+
+.himt-close-btn {
+  background: rgba(0, 0, 0, 0.04) !important;
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+  color: #475569 !important;
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 8px !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 14px !important;
+  transition: all 0.15s ease !important;
+}
+
+.himt-close-btn:hover {
+  background: rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Context Warning */
+.himt-context-warning {
+  background: rgba(254, 243, 199, 0.95) !important;
+  border-left: 4px solid #f59e0b !important;
+  padding: 12px !important;
+  border-radius: 8px !important;
+  margin-bottom: 12px !important;
+  display: none !important;
+  gap: 12px !important;
+}
+
+.himt-warning-icon {
+  font-size: 20px !important;
+}
+
+.himt-warning-content {
+  flex: 1 !important;
+}
+
+.himt-warning-title {
+  font-weight: 600 !important;
+  color: #92400e !important;
+  margin-bottom: 4px !important;
+  font-size: 13px !important;
+}
+
+.himt-warning-text {
+  color: #92400e !important;
+  font-size: 12px !important;
+  margin-bottom: 4px !important;
+}
+
+.himt-warning-note {
+  color: #92400e !important;
+  font-size: 11px !important;
+  opacity: 0.8 !important;
+}
+
+/* Stats Grid */
+.himt-stats-grid {
+  display: grid !important;
+  grid-template-columns: repeat(5, 1fr) !important;
+  gap: 8px !important;
+  margin-bottom: 12px !important;
+}
+
+.himt-stat-card {
+  background: rgba(0, 0, 0, 0.03) !important;
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+  padding: 12px !important;
+  border-radius: 10px !important;
+  text-align: center !important;
+  transition: all 0.15s ease !important;
+}
+
+.himt-stat-card:hover {
+  background: rgba(0, 0, 0, 0.05) !important;
+}
+
+.himt-stat-label {
+  color: #64748b !important;
+  font-weight: 500 !important;
+  font-size: 10px !important;
+  margin-bottom: 4px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+}
+
+.himt-stat-value {
+  font-weight: 700 !important;
+  font-size: 18px !important;
+  color: #0f172a !important;
+}
+
+.himt-stat-allowed .himt-stat-value { color: #10b981 !important; }
+.himt-stat-restricted .himt-stat-value { color: #f59e0b !important; }
+.himt-stat-sandboxed .himt-stat-value { color: #ef4444 !important; }
+.himt-stat-blocked .himt-stat-value { color: #7f1d1d !important; }
+
+/* Controls */
+.himt-controls {
+  display: flex !important;
+  gap: 8px !important;
+  margin-bottom: 12px !important;
+}
+
+.himt-btn {
+  flex: 1 !important;
+  padding: 10px 12px !important;
+  border-radius: 10px !important;
+  border: none !important;
+  font-weight: 600 !important;
+  font-size: 12px !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  transition: all 0.15s ease !important;
+}
+
+.himt-btn-primary {
+  background: rgba(79, 70, 229, 0.1) !important;
+  border: 1px solid rgba(79, 70, 229, 0.25) !important;
+  color: #4338ca !important;
+}
+
+.himt-btn-primary:hover {
+  background: rgba(79, 70, 229, 0.15) !important;
+}
+
+.himt-btn-secondary {
+  background: rgba(22, 163, 74, 0.1) !important;
+  border: 1px solid rgba(22, 163, 74, 0.25) !important;
+  color: #15803d !important;
+}
+
+.himt-btn-secondary:hover {
+  background: rgba(22, 163, 74, 0.15) !important;
+}
+
+.himt-btn-icon {
+  font-size: 14px !important;
+}
+
+.himt-btn-text {
+  font-size: 12px !important;
+}
+
+/* Tracker List */
+.himt-tracker-list {
+  flex: 1 !important;
+  overflow-y: auto !important;
+  margin: 0 -20px !important;
+  padding: 0 20px !important;
+}
+
+.himt-tracker-list::-webkit-scrollbar {
+  width: 8px !important;
+}
+
+.himt-tracker-list::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.03) !important;
+  border-radius: 10px !important;
+}
+
+.himt-tracker-list::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1) !important;
+  border-radius: 10px !important;
+}
+
+.himt-tracker-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Empty State */
+.himt-empty-state {
+  text-align: center !important;
+  padding: 48px 20px !important;
+}
+
+.himt-empty-icon {
+  font-size: 48px !important;
+  margin-bottom: 12px !important;
+}
+
+.himt-empty-text {
+  color: #64748b !important;
+  font-size: 14px !important;
+}
+
+/* Tracker Card */
+.himt-tracker-card {
+  background: rgba(0, 0, 0, 0.02) !important;
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+  border-radius: 12px !important;
+  padding: 14px !important;
+  margin-bottom: 12px !important;
+  transition: all 0.15s ease !important;
+}
+
+.himt-tracker-card:hover {
+  background: rgba(0, 0, 0, 0.04) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06) !important;
+}
+
+.himt-tracker-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: flex-start !important;
+  margin-bottom: 10px !important;
+}
+
+.himt-tracker-info {
+  flex: 1 !important;
+}
+
+.himt-tracker-domain {
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  color: #0f172a !important;
+  margin-bottom: 4px !important;
+}
+
+.himt-tracker-meta {
+  font-size: 12px !important;
+  color: #64748b !important;
+}
+
+.himt-tracker-badge {
+  padding: 4px 10px !important;
+  border-radius: 6px !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  color: white !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+}
+
+.himt-tracker-description {
+  font-size: 12px !important;
+  color: #475569 !important;
+  margin-bottom: 12px !important;
+  line-height: 1.6 !important;
+}
+
+.himt-tracker-metrics {
+  display: flex !important;
+  gap: 16px !important;
+  margin-bottom: 12px !important;
+}
+
+.himt-metric {
+  flex: 1 !important;
+}
+
+.himt-metric-label {
+  font-size: 10px !important;
+  color: #64748b !important;
+  font-weight: 500 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+  margin-bottom: 2px !important;
+}
+
+.himt-metric-value {
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  color: #0f172a !important;
+}
+
+/* Tracker Details */
+.himt-tracker-details {
+  background: rgba(0, 0, 0, 0.02) !important;
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+  border-radius: 8px !important;
+  padding: 12px !important;
+  margin-bottom: 12px !important;
+}
+
+.himt-detail-section {
+  margin-bottom: 10px !important;
+}
+
+.himt-detail-section:last-child {
+  margin-bottom: 0 !important;
+}
+
+.himt-detail-label {
+  font-size: 11px !important;
+  color: #64748b !important;
+  font-weight: 600 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+  margin-bottom: 4px !important;
+}
+
+.himt-detail-value {
+  font-size: 12px !important;
+  color: #0f172a !important;
+  line-height: 1.5 !important;
+}
+
+/* Tracker Actions */
+.himt-tracker-actions {
+  display: flex !important;
+  gap: 6px !important;
+  flex-wrap: wrap !important;
+}
+
+.himt-action-btn {
+  flex: 1 !important;
+  min-width: 80px !important;
+  padding: 8px 10px !important;
+  background: rgba(0, 0, 0, 0.03) !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  border-radius: 8px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px !important;
+  transition: all 0.15s ease !important;
+  color: #475569 !important;
+}
+
+.himt-action-btn:hover {
+  background: rgba(0, 0, 0, 0.06) !important;
+}
+
+.himt-action-allow:hover {
+  background: rgba(16, 185, 129, 0.1) !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
+  color: #059669 !important;
+}
+
+.himt-action-restrict:hover {
+  background: rgba(245, 158, 11, 0.1) !important;
+  border-color: rgba(245, 158, 11, 0.3) !important;
+  color: #d97706 !important;
+}
+
+.himt-action-sandbox:hover {
+  background: rgba(239, 68, 68, 0.1) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+  color: #dc2626 !important;
+}
+
+.himt-action-block:hover {
+  background: rgba(127, 29, 29, 0.1) !important;
+  border-color: rgba(127, 29, 29, 0.3) !important;
+  color: #991b1b !important;
+}
+
+.himt-action-details {
+  flex: 0 0 100% !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  .himt-panel {
+    width: calc(100vw - 32px) !important;
+    top: 8px !important;
+    right: 8px !important;
+    left: 8px !important;
+  }
+  
+  .himt-stats-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+}
