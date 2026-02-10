@@ -6,7 +6,7 @@ A hackathon-grade Chrome extension that makes invisible web tracking visible, ex
 ![Manifest](https://img.shields.io/badge/manifest-v3-green)
 ![License](https://img.shields.io/badge/license-MIT-orange)
 
-## 🎯 Core Features
+## Core Features
 
 ### Adaptive Prevention Engine
 - **Risk-Based Scoring**: Dynamic risk calculation (0-100) based on tracker behavior, category, and reputation
@@ -35,7 +35,7 @@ A hackathon-grade Chrome extension that makes invisible web tracking visible, ex
 - **No User Tracking**: The extension doesn't track you
 - **Transparent Logic**: All decisions based on explainable rules, not "AI black boxes"
 
-## 🏗️ Architecture
+##  Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -70,7 +70,7 @@ A hackathon-grade Chrome extension that makes invisible web tracking visible, ex
 ```
 
 
-## 📦 Installation & Usage
+##  Installation & Usage
 
 For detailed system requirements, please see [REQUIREMENTS.md](./REQUIREMENTS.md).
 For a step-by-step installation and user guide, please see [USAGE.md](./USAGE.md).
@@ -82,7 +82,7 @@ For a step-by-step installation and user guide, please see [USAGE.md](./USAGE.md
 3. Click **Load unpacked**
 4. Select this project folder
 
-## 🎮 Usage Guide
+##  Usage Guide
 
 See [USAGE.md](./USAGE.md) for full details on:
 - Understanding Risk Scores
@@ -90,7 +90,7 @@ See [USAGE.md](./USAGE.md) for full details on:
 - Exporting Reports
 
 
-## ⚙️ Configuration
+##  Configuration
 
 ### Adjusting Risk Thresholds
 
@@ -138,7 +138,7 @@ Add URL patterns in `policies.json`:
 }
 ```
 
-## 🔬 How Risk Scoring Works
+##  How Risk Scoring Works
 
 Each tracker receives a score (0-100) based on:
 
@@ -162,7 +162,7 @@ Each tracker receives a score (0-100) based on:
 
 **Final Score** = Base + Signals + Adjustments (clamped 0-100)
 
-## 📊 File Structure
+##  File Structure
 
 ```
 how-i-met-your-tracker-v2/
@@ -186,7 +186,7 @@ how-i-met-your-tracker-v2/
     └── logo2.png
 ```
 
-## 🚧 Known Limitations (Chrome MV3)
+##  Known Limitations (Chrome MV3)
 
 ### Technical Constraints
 1. **No Dynamic Header Modification**: Can't modify headers on-the-fly (MV3 limitation)
@@ -199,7 +199,7 @@ how-i-met-your-tracker-v2/
 2. **Frequency limiting**: Can detect but not rate-limit in real-time
 3. **Cookie blocking**: Best-effort via response header removal
 
-## 🛠️ Development
+##  Development
 
 ### Running Tests
 
@@ -225,7 +225,7 @@ https://stripe.com/checkout
 https://github.com/login
 ```
 
-## 🎓 Educational Use
+##  Educational Use
 
 This extension demonstrates:
 
@@ -245,29 +245,29 @@ This extension demonstrates:
 - **Policy-Driven**: Configuration over code
 - **Event-Driven**: Reactive programming patterns
 
-## 🏆 Hackathon Highlights
+##  Hackathon Highlights
 
 ### Technical Depth
-✅ Modular architecture with 5+ independent engines  
-✅ Comprehensive risk scoring algorithm  
-✅ Context-aware enforcement with deferred blocking  
-✅ 500+ tracker knowledge base integration  
-✅ Glassmorphic UI with smooth animations  
+ Modular architecture with 5+ independent engines  
+ Comprehensive risk scoring algorithm  
+ Context-aware enforcement with deferred blocking  
+ 500+ tracker knowledge base integration  
+ Glassmorphic UI with smooth animations  
 
 ### Product Clarity
-✅ Clear value proposition: "See what tracks you, control it"  
-✅ Plain English explanations for every decision  
-✅ Non-intrusive background mode  
-✅ One-click overrides for user control  
-✅ Privacy-first design (no data collection)  
+ Clear value proposition: "See what tracks you, control it"  
+ Plain English explanations for every decision  
+ Non-intrusive background mode  
+ One-click overrides for user control  
+ Privacy-first design (no data collection)  
 
 ### Innovation
-✅ First extension to combine adaptive risk scoring + context awareness  
-✅ Novel "deferred blocking" for critical flows  
-✅ Explainable tracking (not just blocking)  
-✅ Policy-driven approach (ML-ready architecture)  
+ First extension to combine adaptive risk scoring + context awareness  
+ Novel "deferred blocking" for critical flows  
+ Explainable tracking (not just blocking)  
+ Policy-driven approach (ML-ready architecture)  
 
-## 🚀 Future Enhancements
+##  Future Enhancements
 
 ### Post-Hackathon Ideas
 - [ ] **ML Risk Prediction**: Train on user feedback to improve scoring
@@ -278,11 +278,11 @@ This extension demonstrates:
 - [ ] **TCF Integration**: Support for IAB Transparency & Consent Framework
 - [ ] **Privacy Badger Heuristics**: Learn tracking behavior over time
 
-## 📝 License
+##  License
 
 MIT License - feel free to use, modify, and build upon this project!
 
-## 🤝 Contributing
+##  Contributing
 
 This is a hackathon project, but contributions are welcome:
 
@@ -292,11 +292,11 @@ This is a hackathon project, but contributions are welcome:
 4. Test thoroughly
 5. Submit a pull request
 
-## ⚠️ Disclaimer
+##  Disclaimer
 
 This extension is for **educational and demonstration purposes**. It uses Chrome's declarativeNetRequest API which has limitations. For production use, additional testing, security auditing, and compliance review would be required.
 
-## 📧 Support
+##  Support
 
 For questions, issues, or feedback:
 - Open an issue on GitHub
@@ -305,6 +305,6 @@ For questions, issues, or feedback:
 
 ---
 
-**Built with ❤️ for privacy-conscious users**
+**Built with for privacy conscious users**
 
 *Making invisible tracking visible, one tracker at a time.*
