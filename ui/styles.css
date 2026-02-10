@@ -20,7 +20,27 @@
   display: flex !important;
   flex-direction: column !important;
   line-height: 1.5 !important;
-  overflow: hidden !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  max-height: 90vh !important;
+}
+
+.himt-panel::-webkit-scrollbar {
+  width: 8px !important;
+}
+
+.himt-panel::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.03) !important;
+  border-radius: 10px !important;
+}
+
+.himt-panel::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1) !important;
+  border-radius: 10px !important;
+}
+
+.himt-panel::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.15) !important;
 }
 
 /* Header */
@@ -38,7 +58,9 @@
 }
 
 .himt-logo-icon {
-  font-size: 32px !important;
+  width: 36px !important;
+  height: 36px !important;
+  object-fit: contain !important;
 }
 
 .himt-logo-text {
@@ -151,10 +173,21 @@
   color: #0f172a !important;
 }
 
-.himt-stat-allowed .himt-stat-value { color: #10b981 !important; }
-.himt-stat-restricted .himt-stat-value { color: #f59e0b !important; }
-.himt-stat-sandboxed .himt-stat-value { color: #ef4444 !important; }
-.himt-stat-blocked .himt-stat-value { color: #7f1d1d !important; }
+.himt-stat-allowed .himt-stat-value {
+  color: #10b981 !important;
+}
+
+.himt-stat-restricted .himt-stat-value {
+  color: #f59e0b !important;
+}
+
+.himt-stat-sandboxed .himt-stat-value {
+  color: #ef4444 !important;
+}
+
+.himt-stat-blocked .himt-stat-value {
+  color: #7f1d1d !important;
+}
 
 /* Controls */
 .himt-controls {
@@ -208,29 +241,13 @@
 
 /* Tracker List */
 .himt-tracker-list {
-  flex: 1 !important;
-  overflow-y: auto !important;
+  flex: none !important;
+  overflow-y: visible !important;
   margin: 0 -20px !important;
   padding: 0 20px !important;
 }
 
-.himt-tracker-list::-webkit-scrollbar {
-  width: 8px !important;
-}
-
-.himt-tracker-list::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.03) !important;
-  border-radius: 10px !important;
-}
-
-.himt-tracker-list::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.1) !important;
-  border-radius: 10px !important;
-}
-
-.himt-tracker-list::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.15) !important;
-}
+/* Scrollbar styles moved to .himt-panel */
 
 /* Empty State */
 .himt-empty-state {
@@ -425,8 +442,85 @@
     right: 8px !important;
     left: 8px !important;
   }
-  
+
   .himt-stats-grid {
     grid-template-columns: repeat(3, 1fr) !important;
   }
+}
+
+/* Data Exposure Expandable Styles */
+.himt-expandable {
+  display: block !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  padding-bottom: 8px !important;
+}
+
+.himt-expandable:hover {
+  background: rgba(0, 0, 0, 0.02) !important;
+}
+
+.himt-data-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  width: 100% !important;
+}
+
+.himt-data-right {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+.himt-chevron {
+  font-size: 10px !important;
+  color: #94a3b8 !important;
+  transition: transform 0.2s ease !important;
+}
+
+.himt-data-companies {
+  display: none;
+  /* Controlled by JS, but good to have default */
+  margin-top: 12px !important;
+  padding: 8px 12px !important;
+  background: rgba(0, 0, 0, 0.02) !important;
+  border-radius: 6px !important;
+  font-size: 11px !important;
+  color: #475569 !important;
+  border: 1px solid rgba(0, 0, 0, 0.04) !important;
+}
+
+.himt-company-item {
+  margin-bottom: 2px !important;
+  line-height: 1.4 !important;
+}
+
+.himt-company-more {
+  font-style: italic !important;
+  color: #94a3b8 !important;
+  margin-top: 4px !important;
+}
+
+
+/* Scroll to Top Button */
+.himt-scroll-top {
+  display: block !important;
+  width: 100% !important;
+  margin-top: 16px !important;
+  padding: 10px !important;
+  background: rgba(0, 0, 0, 0.03) !important;
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+  border-radius: 8px !important;
+  color: #475569 !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  text-align: center !important;
+}
+
+.himt-scroll-top:hover {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: #0f172a !important;
 }

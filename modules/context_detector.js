@@ -1,12 +1,9 @@
-// Context Detection Module - Identifies critical user flows
-
 export class ContextDetector {
   constructor(policies) {
     this.policies = policies;
-    this.contextCache = new Map(); // tabId -> contexts
+    this.contextCache = new Map();
   }
 
-  // Detect contexts from URL patterns
   detectFromURL(url) {
     const contexts = new Set();
     const urlLower = url.toLowerCase();
@@ -22,7 +19,6 @@ export class ContextDetector {
     return contexts;
   }
 
-  // Detect contexts from DOM signals
   detectFromDOM(domSignals) {
     const contexts = new Set();
 
@@ -35,17 +31,14 @@ export class ContextDetector {
     return contexts;
   }
 
-  // Combine URL and DOM contexts
   combineContexts(urlContexts, domContexts) {
     return new Set([...urlContexts, ...domContexts]);
   }
 
-  // Check if any critical context is active
   isCriticalContext(contexts) {
     return contexts && contexts.size > 0;
   }
 
-  // Get context priority (for override decisions)
   getContextPriority(contexts) {
     const priorities = {
       'payment': 3,
@@ -60,7 +53,6 @@ export class ContextDetector {
     return maxPriority;
   }
 
-  // Apply context-based enforcement override
   applyContextOverride(enforcementMode, contexts) {
     if (!this.isCriticalContext(contexts)) {
       return enforcementMode;
@@ -70,39 +62,34 @@ export class ContextDetector {
     return override || enforcementMode;
   }
 
-  // Store context for tab
   setTabContext(tabId, contexts) {
     this.contextCache.set(tabId, contexts);
   }
 
-  // Get stored context for tab
   getTabContext(tabId) {
     return this.contextCache.get(tabId) || new Set();
   }
 
-  // Clear context for tab
   clearTabContext(tabId) {
     this.contextCache.delete(tabId);
   }
 
-  // Get human-readable context description
   getContextDescription(contexts) {
     if (contexts.size === 0) return 'No critical context detected';
-    
+
     const contextLabels = {
       'payment': 'Payment Processing',
       'checkout': 'Checkout Flow',
       'login': 'Login/Authentication'
     };
 
-    const descriptions = Array.from(contexts).map(ctx => 
+    const descriptions = Array.from(contexts).map(ctx =>
       contextLabels[ctx] || ctx
     );
 
     return descriptions.join(', ');
   }
 
-  // Check if context requires special handling
   requiresCarefulHandling(contexts) {
     return contexts.has('payment') || contexts.has('checkout');
   }

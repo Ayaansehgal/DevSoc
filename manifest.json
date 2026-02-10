@@ -1,14 +1,15 @@
 {
   "manifest_version": 3,
   "name": "How I Met Your Tracker",
-  "version": "2.0.0",
-  "description": "Makes invisible web tracking visible, explainable, and consent-based with adaptive prevention",
+  "version": "2.1.0",
+  "description": "Makes invisible web tracking visible, explainable, and consent-based with adaptive ML-powered prevention",
   "permissions": [
     "declarativeNetRequest",
     "declarativeNetRequestWithHostAccess",
     "webRequest",
     "webNavigation",
     "storage",
+    "unlimitedStorage",
     "tabs",
     "scripting"
   ],
@@ -41,7 +42,9 @@
       "resources": [
         "assets/*",
         "tracker_kb.json",
-        "policies.json"
+        "policies.json",
+        "modules/fingerprint_interceptor.js",
+        "modules/pretrained_weights.json"
       ],
       "matches": [
         "<all_urls>"

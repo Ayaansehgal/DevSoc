@@ -1,97 +1,89 @@
-// Service Worker - Background processing and network monitoring
-
 import { RiskEngine } from './modules/risk_engine.js';
 import { PolicyEngine } from './modules/policy_engine.js';
 import { EnforcementEngine } from './modules/enforcement.js';
 import { ContextDetector } from './modules/context_detector.js';
 import { trackerKnowledge } from './modules/tracker_knowledge.js';
+import { cloudSync } from './modules/cloud_sync.js';
+import { categoryClassifier } from './modules/category_classifier.js';
+import { fingerprintDetector } from './modules/fingerprint_detector.js';
+import { patternAnalyzer } from './modules/pattern_analyzer.js';
+import { mlInsightsEngine } from './modules/ml_insights.js';
 
-// Global state
 let policies = null;
 let riskEngine = null;
 let policyEngine = null;
 let enforcementEngine = null;
 let contextDetector = null;
 
-// Per-tab tracker data
-let tabTrackers = new Map(); // tabId -> Map(domain -> trackerData)
-let tabContexts = new Map(); // tabId -> Set(contexts)
-let tabStats = new Map(); // tabId -> { total, blocked, allowed }
+let tabTrackers = new Map();
+let tabContexts = new Map();
+let tabStats = new Map();
 
-// Initialize on install
 chrome.runtime.onInstalled.addListener(async () => {
   console.log('[HIMT] Extension installed');
   await initializeEngines();
 });
 
-// Initialize on browser startup (service worker restart)
 chrome.runtime.onStartup.addListener(async () => {
   console.log('[HIMT] Extension started');
   await initializeEngines();
 });
 
-// Initialize engines and load data
 async function initializeEngines() {
   try {
-    // Load policies
     const policiesResponse = await fetch(chrome.runtime.getURL('policies.json'));
     policies = await policiesResponse.json();
-    console.log('[HIMT] Policies loaded');
 
-    // Load tracker knowledge base
     await trackerKnowledge.loadDatabase();
 
-    // Initialize engines
     riskEngine = new RiskEngine(policies);
     policyEngine = new PolicyEngine(policies);
     enforcementEngine = new EnforcementEngine();
+    await enforcementEngine.init();
     contextDetector = new ContextDetector(policies);
 
+    await cloudSync.init();
+
+    await categoryClassifier.initialize();
+    await fingerprintDetector.initialize();
+    await patternAnalyzer.initialize();
     console.log('[HIMT] All engines initialized successfully');
   } catch (error) {
     console.error('[HIMT] Failed to initialize engines:', error);
   }
 }
 
-// Extension icon click - toggle overlay
 chrome.action.onClicked.addListener((tab) => {
   chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_OVERLAY' }).catch(() => {
     console.log('[HIMT] Could not send message to tab:', tab.id);
   });
 });
 
-// Monitor network requests
 chrome.webRequest.onBeforeRequest.addListener(
   async (details) => {
     if (!policies) await initializeEngines();
 
     const { url, tabId, type, initiator } = details;
 
-    // Ignore invalid tabs and extension URLs
     if (tabId < 0 || url.startsWith('chrome://') || url.startsWith('chrome-extension://')) {
       return;
     }
 
-    // Get tracker info
     const trackerInfo = trackerKnowledge.getTrackerInfo(url);
     if (!trackerInfo) return;
 
-    // Skip first-party requests
     if (!riskEngine.isCrossSite(url, initiator)) {
       return;
     }
 
-    // Get current contexts for this tab
     const contexts = tabContexts.get(tabId) || new Set();
 
-    // Calculate risk score
     const riskScore = riskEngine.calculateRisk(
       { url, type, initiator, tabId },
       trackerInfo,
       contexts
     );
 
-    // Check for user override first
     const userOverride = await policyEngine.getUserOverride(trackerInfo.domain, tabId);
     let enforcementMode;
     let wasOverridden = false;
@@ -100,7 +92,6 @@ chrome.webRequest.onBeforeRequest.addListener(
       enforcementMode = userOverride.mode;
       wasOverridden = true;
     } else {
-      // Determine enforcement mode based on risk and context
       enforcementMode = policyEngine.determineEnforcementMode(
         riskScore,
         contexts,
@@ -108,7 +99,6 @@ chrome.webRequest.onBeforeRequest.addListener(
       );
     }
 
-    // Store tracker data for this tab
     if (!tabTrackers.has(tabId)) {
       tabTrackers.set(tabId, new Map());
     }
@@ -116,9 +106,16 @@ chrome.webRequest.onBeforeRequest.addListener(
     const existingTracker = tabTrackers.get(tabId).get(trackerInfo.domain);
     const requestCount = existingTracker ? existingTracker.requestCount + 1 : 1;
 
+    const fingerprintData = fingerprintDetector.getSummary(trackerInfo.domain);
+
+    let finalRiskScore = riskScore;
+    if (fingerprintData.detected) {
+      finalRiskScore = Math.min(100, riskScore + Math.round(fingerprintData.riskScore * 0.5));
+    }
+
     const trackerData = {
       info: trackerInfo,
-      riskScore,
+      riskScore: finalRiskScore,
       enforcementMode,
       url,
       type,
@@ -126,9 +123,11 @@ chrome.webRequest.onBeforeRequest.addListener(
       lastSeen: Date.now(),
       contexts: Array.from(contexts),
       wasOverridden,
+      fingerprinting: fingerprintData,
+      mlClassified: trackerInfo.mlDetected || false,
       explanation: trackerKnowledge.explainTracker(
         trackerInfo,
-        riskScore,
+        finalRiskScore,
         enforcementMode,
         requestCount
       )
@@ -136,10 +135,19 @@ chrome.webRequest.onBeforeRequest.addListener(
 
     tabTrackers.get(tabId).set(trackerInfo.domain, trackerData);
 
-    // Update tab statistics
+    try {
+      const siteDomain = initiator ? new URL(initiator).hostname : 'unknown';
+      mlInsightsEngine.recordTracker(trackerInfo.domain, siteDomain, {
+        category: trackerInfo.category,
+        owner: trackerInfo.owner,
+        riskScore: finalRiskScore,
+        dataCollected: trackerInfo.dataCollected || [],
+        enforcementMode
+      });
+    } catch (e) { }
+
     updateTabStats(tabId, enforcementMode);
 
-    // Execute enforcement
     try {
       const result = await enforcementEngine.enforce(
         trackerInfo.domain,
@@ -157,59 +165,73 @@ chrome.webRequest.onBeforeRequest.addListener(
       console.error('[HIMT] Enforcement failed:', error);
     }
 
-    // Notify content script about tracker
     notifyContentScript(tabId, {
       type: 'TRACKER_DETECTED',
       tracker: trackerData,
       stats: tabStats.get(tabId)
     });
 
+    const patternAlerts = patternAnalyzer.recordTrackerEvent({
+      domain: trackerInfo.domain,
+      category: trackerInfo.category,
+      riskScore: finalRiskScore,
+      websiteUrl: initiator || '',
+      timestamp: Date.now()
+    });
+
+    if (patternAlerts.length > 0) {
+      notifyContentScript(tabId, {
+        type: 'PATTERN_ANOMALY',
+        alerts: patternAlerts
+      });
+    }
+
+    try {
+      await cloudSync.queueEvent({
+        ...trackerData,
+        websiteUrl: initiator || ''
+      });
+    } catch (error) {
+      console.error('[HIMT] Cloud sync queue failed:', error);
+    }
+
   },
   { urls: ['<all_urls>'] }
 );
 
-// Handle navigation events
 if (chrome.webNavigation) {
   chrome.webNavigation.onCommitted.addListener(async (details) => {
-    if (details.frameId !== 0) return; // Only main frame
+    if (details.frameId !== 0) return;
 
-    // Ensure engines are initialized
     if (!contextDetector) await initializeEngines();
 
     const { tabId, url } = details;
 
-    // Detect contexts from URL
     const urlContexts = contextDetector.detectFromURL(url);
     const previousContexts = tabContexts.get(tabId) || new Set();
     tabContexts.set(tabId, urlContexts);
 
-    // Check if leaving critical context
     const wasInCriticalContext = previousContexts.size > 0;
     const nowInCriticalContext = urlContexts.size > 0;
 
-    // Clear tracker data on navigation
     tabTrackers.delete(tabId);
     tabStats.delete(tabId);
 
-    // Activate deferred blocks if leaving critical context
     if (wasInCriticalContext && !nowInCriticalContext) {
-      console.log('[HIMT] Leaving critical context, activating deferred blocks');
       setTimeout(() => {
         enforcementEngine.activateDeferredBlocks(tabId);
       }, policies.deferredBlockingDelay || 3000);
     }
 
-    // Notify content script about context change
     notifyContentScript(tabId, {
       type: 'CONTEXT_CHANGED',
       contexts: Array.from(urlContexts)
     });
   });
 } else {
-  console.warn('[HIMT] webNavigation API not available - please reinstall the extension');
+  console.warn('[HIMT] webNavigation API not available');
 }
 
-// Handle messages from content script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {
     const { type, data } = message;
@@ -228,7 +250,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           break;
 
         case 'UPDATE_CONTEXT':
-          // Merge URL and DOM contexts
           const urlContexts = tabContexts.get(tabId) || new Set();
           const domContexts = contextDetector.detectFromDOM(data.domSignals);
           const combinedContexts = contextDetector.combineContexts(urlContexts, domContexts);
@@ -250,13 +271,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           );
 
           if (success) {
-            // Re-evaluate and re-enforce
             const tracker = tabTrackers.get(tabId)?.get(data.domain);
             if (tracker) {
               tracker.enforcementMode = data.mode;
               tracker.wasOverridden = true;
 
-              // Apply new enforcement
               await enforcementEngine.enforce(
                 data.domain,
                 data.mode,
@@ -265,8 +284,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 tabContexts.get(tabId)
               );
 
-              // Update stats
               updateTabStats(tabId, data.mode);
+
+              try {
+                await cloudSync.queueEvent({
+                  domain: tracker.info?.domain || data.domain,
+                  owner: tracker.info?.owner || 'Unknown',
+                  category: tracker.info?.category || 'Unknown',
+                  riskScore: tracker.riskScore || 0,
+                  enforcementMode: data.mode,
+                  requestCount: 1,
+                  websiteUrl: tracker.websiteUrl || '',
+                  contexts: Array.from(tabContexts.get(tabId) || [])
+                });
+              } catch (err) { }
             }
           }
 
@@ -274,8 +305,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           break;
 
         case 'BLOCK_DOMAIN':
-          // Legacy support from reference implementation
           await enforcementEngine.blockRequest(data.domain, tabId);
+          try {
+            await cloudSync.queueEvent({
+              domain: data.domain,
+              owner: 'Unknown',
+              category: 'Unknown',
+              riskScore: 50,
+              enforcementMode: 'block',
+              requestCount: 1,
+              websiteUrl: '',
+              contexts: []
+            });
+          } catch (err) { }
           sendResponse({ success: true });
           break;
 
@@ -289,6 +331,88 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           sendResponse({ success: true, report });
           break;
 
+        case 'ACCOUNT_REGISTER':
+          const newDeviceId = await cloudSync.resetForNewAccount(data.email);
+          sendResponse({ success: true, deviceId: newDeviceId });
+          break;
+
+        case 'ACCOUNT_LOGIN':
+          await cloudSync.setUserAccount(data.email, data.deviceId);
+          sendResponse({ success: true, deviceId: cloudSync.getDeviceId() });
+          break;
+
+        case 'ACCOUNT_LOGOUT':
+          await cloudSync.setUserAccount(null);
+          sendResponse({ success: true });
+          break;
+
+        case 'DEVICE_ID_CHANGED':
+          await cloudSync.setUserAccount(null, data.newDeviceId);
+          sendResponse({ success: true });
+          break;
+
+        case 'GET_DEVICE_ID':
+          sendResponse({ success: true, deviceId: cloudSync.getDeviceId() });
+          break;
+
+        case 'FINGERPRINT_EVENTS':
+          for (const event of data.events) {
+            fingerprintDetector.analyzeEvent({
+              domain: new URL(event.url).hostname,
+              type: event.type,
+              data: event.data
+            });
+          }
+          sendResponse({ success: true });
+          break;
+
+        case 'GET_PATTERN_SUMMARY':
+          const sessionSummary = patternAnalyzer.getSessionSummary();
+          const insights = patternAnalyzer.getInsights();
+          const privacyScore = patternAnalyzer.getPrivacyScore();
+          sendResponse({
+            success: true,
+            summary: sessionSummary,
+            insights: insights,
+            privacyScore: privacyScore
+          });
+          break;
+
+        case 'GET_FINGERPRINT_DATA':
+          const fpData = fingerprintDetector.getSummary(data.domain);
+          sendResponse({ success: true, data: fpData });
+          break;
+
+        case 'CLEAR_PATTERN_DATA':
+          await patternAnalyzer.clearAllData();
+          sendResponse({ success: true });
+          break;
+
+        case 'CATEGORY_FEEDBACK':
+          try {
+            await categoryClassifier.recordFeedback(
+              data.url || '',
+              data.domain,
+              data.newCategory
+            );
+            sendResponse({ success: true });
+          } catch (error) {
+            sendResponse({ success: false, error: error.message });
+          }
+          break;
+
+        case 'GET_ML_INSIGHTS':
+          const actionableInsights = mlInsightsEngine.generateInsights();
+          sendResponse({ success: true, data: actionableInsights });
+          break;
+
+        case 'FINGERPRINT_DETECTED':
+          if (data.domain && data.technique) {
+            mlInsightsEngine.recordFingerprint(data.domain, data.technique);
+          }
+          sendResponse({ success: true });
+          break;
+
         default:
           sendResponse({ success: false, error: 'Unknown message type' });
       }
@@ -298,10 +422,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
   })();
 
-  return true; // Keep channel open for async response
+  return true;
 });
 
-// Clean up on tab close
 chrome.tabs.onRemoved.addListener((tabId) => {
   tabTrackers.delete(tabId);
   tabContexts.delete(tabId);
@@ -309,10 +432,8 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   riskEngine.clearTabData(tabId);
   enforcementEngine.clearTabRules(tabId);
   policyEngine.clearTabOverrides(tabId);
-  console.log('[HIMT] Cleaned up data for closed tab:', tabId);
 });
 
-// Helper: Update tab statistics
 function updateTabStats(tabId, enforcementMode) {
   if (!tabStats.has(tabId)) {
     tabStats.set(tabId, getDefaultStats());
@@ -322,22 +443,13 @@ function updateTabStats(tabId, enforcementMode) {
   stats.total++;
 
   switch (enforcementMode) {
-    case 'allow':
-      stats.allowed++;
-      break;
-    case 'restrict':
-      stats.restricted++;
-      break;
-    case 'sandbox':
-      stats.sandboxed++;
-      break;
-    case 'block':
-      stats.blocked++;
-      break;
+    case 'allow': stats.allowed++; break;
+    case 'restrict': stats.restricted++; break;
+    case 'sandbox': stats.sandboxed++; break;
+    case 'block': stats.blocked++; break;
   }
 }
 
-// Helper: Get default stats object
 function getDefaultStats() {
   return {
     total: 0,
@@ -348,14 +460,10 @@ function getDefaultStats() {
   };
 }
 
-// Helper: Notify content script
 function notifyContentScript(tabId, message) {
-  chrome.tabs.sendMessage(tabId, message).catch(() => {
-    // Tab might not be ready or content script not injected yet
-  });
+  chrome.tabs.sendMessage(tabId, message).catch(() => { });
 }
 
-// Helper: Generate privacy report
 function generateReport(tabId) {
   const trackers = tabTrackers.get(tabId);
   const stats = tabStats.get(tabId) || getDefaultStats();

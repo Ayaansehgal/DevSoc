@@ -1,0 +1,13 @@
+{
+    "name": "himt-backend-lambda",
+    "version": "1.0.0",
+    "description": "How I Met Your Tracker - AWS Lambda Backend",
+    "main": "ingestEvents.js",
+    "scripts": {
+        "package": "powershell -Command \"Compress-Archive -Path *.js,package.json,node_modules -DestinationPath ../lambda-package.zip -Force\""
+    },
+    "dependencies": {
+        "@aws-sdk/client-dynamodb": "^3.400.0",
+        "@aws-sdk/lib-dynamodb": "^3.400.0"
+    }
+}

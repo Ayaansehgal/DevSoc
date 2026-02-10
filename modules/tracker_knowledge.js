@@ -1,10 +1,10 @@
-// Enhanced Tracker Knowledge Base Module
-// Integrates with external tracker_kb.json for comprehensive coverage
+import { categoryClassifier } from './category_classifier.js';
 
 export class TrackerKnowledge {
   constructor() {
     this.trackerDB = {};
     this.loaded = false;
+    this.mlClassifierReady = false;
   }
 
   async loadDatabase() {
@@ -12,13 +12,14 @@ export class TrackerKnowledge {
       const response = await fetch(chrome.runtime.getURL('tracker_kb.json'));
       this.trackerDB = await response.json();
       this.loaded = true;
-      console.log('[TrackerKnowledge] Loaded', Object.keys(this.trackerDB).length, 'tracker entries');
-    } catch (error) {
-      console.error('[TrackerKnowledge] Failed to load database:', error);
-    }
+
+      try {
+        await categoryClassifier.initialize();
+        this.mlClassifierReady = true;
+      } catch (mlError) { }
+    } catch (error) { }
   }
 
-  // Extract clean domain from URL
   extractDomain(url) {
     try {
       const urlObj = new URL(url);
@@ -28,15 +29,12 @@ export class TrackerKnowledge {
     }
   }
 
-  // Get tracker information with fallback
   getTrackerInfo(url) {
     const domain = this.extractDomain(url);
     if (!domain) return null;
 
-    // Direct lookup
     let trackerData = this.trackerDB[domain];
-    
-    // Try subdomain match (e.g., stats.google-analytics.com)
+
     if (!trackerData) {
       for (const [knownDomain, data] of Object.entries(this.trackerDB)) {
         if (domain.endsWith(knownDomain) || knownDomain.includes(domain)) {
@@ -54,11 +52,34 @@ export class TrackerKnowledge {
         description: this.getDescription(trackerData.category, trackerData.company),
         dataCollected: this.getDataCollected(trackerData.category),
         baseRisk: this.getCategoryBaseRisk(trackerData.category),
-        regulation: this.getRegulation(trackerData.category)
+        regulation: this.getRegulation(trackerData.category),
+        mlDetected: false
       };
     }
 
-    // Unknown tracker fallback
+    if (this.mlClassifierReady) {
+      try {
+        const mlResult = categoryClassifier.predict(url, domain);
+        const explainedResult = categoryClassifier.explainClassification(mlResult);
+
+        if (mlResult.category !== 'Unknown' && mlResult.confidence >= 0.5) {
+          return {
+            domain,
+            owner: 'Unknown',
+            category: mlResult.category,
+            description: this.getDescription(mlResult.category, 'Unknown') + ' (ML-detected)',
+            dataCollected: this.getDataCollected(mlResult.category),
+            baseRisk: this.getCategoryBaseRisk(mlResult.category),
+            regulation: this.getRegulation(mlResult.category),
+            mlDetected: true,
+            mlConfidence: mlResult.confidence,
+            mlMethod: mlResult.method,
+            mlExplanation: explainedResult.explanation
+          };
+        }
+      } catch (mlError) { }
+    }
+
     return {
       domain,
       owner: 'Unknown',
@@ -66,11 +87,11 @@ export class TrackerKnowledge {
       description: 'Third-party resource with unclear data practices',
       dataCollected: ['Browsing behavior', 'Request metadata'],
       baseRisk: 10,
-      regulation: 'No public documentation available'
+      regulation: 'No public documentation available',
+      mlDetected: false
     };
   }
 
-  // Get description based on category
   getDescription(category, company) {
     const descriptions = {
       'Advertising': `Tracks your browsing to build advertising profiles and serve targeted ads`,
@@ -85,7 +106,7 @@ export class TrackerKnowledge {
       'Customer Success': `Tracks customer interactions for support purposes`,
       'Unknown': `Third-party service with unclear purpose`
     };
-    
+
     let desc = descriptions[category] || descriptions['Unknown'];
     if (company && company !== 'Unknown') {
       desc += ` (operated by ${company})`;
@@ -93,7 +114,6 @@ export class TrackerKnowledge {
     return desc;
   }
 
-  // Get typical data collected by category
   getDataCollected(category) {
     const dataTypes = {
       'Advertising': ['Browsing history', 'Ad interactions', 'User interests', 'Device fingerprint'],
@@ -107,11 +127,10 @@ export class TrackerKnowledge {
       'Customer Success': ['Support interactions', 'User feedback', 'Product usage'],
       'Unknown': ['Unknown data collection']
     };
-    
+
     return dataTypes[category] || dataTypes['Unknown'];
   }
 
-  // Get base risk score by category
   getCategoryBaseRisk(category) {
     const riskScores = {
       'Advertising': 30,
@@ -126,11 +145,10 @@ export class TrackerKnowledge {
       'Customer Success': 15,
       'Unknown': 10
     };
-    
+
     return riskScores[category] || 10;
   }
 
-  // Get regulatory information
   getRegulation(category) {
     const regulations = {
       'Advertising': 'Usually requires explicit consent under GDPR and CCPA',
@@ -143,14 +161,13 @@ export class TrackerKnowledge {
       'CDN': 'Typically does not require consent for core functionality',
       'Unknown': 'Regulatory requirements unclear'
     };
-    
+
     return regulations[category] || regulations['Unknown'];
   }
 
-  // Generate plain English explanation
   explainTracker(trackerInfo, riskScore, enforcementMode, requestCount) {
     const { owner, category, description, dataCollected, regulation } = trackerInfo;
-    
+
     let explanation = {
       summary: `${owner} • ${category}`,
       description: description,
@@ -162,11 +179,10 @@ export class TrackerKnowledge {
       requestCount: requestCount,
       impact: this.getImpact(riskScore, enforcementMode)
     };
-    
+
     return explanation;
   }
 
-  // Get risk level label
   getRiskLevel(score) {
     if (score >= 85) return 'CRITICAL';
     if (score >= 60) return 'HIGH';
@@ -174,7 +190,6 @@ export class TrackerKnowledge {
     return 'LOW';
   }
 
-  // Get user impact statement
   getImpact(riskScore, enforcementMode) {
     const impacts = {
       'allow': 'This tracker is currently allowed to operate freely.',
@@ -182,32 +197,29 @@ export class TrackerKnowledge {
       'sandbox': 'This tracker is isolated and cannot persist data across pages.',
       'block': 'This tracker is completely blocked from loading.'
     };
-    
+
     let impact = impacts[enforcementMode] || 'Unknown enforcement status.';
-    
+
     if (riskScore >= 85) {
       impact += ' High privacy risk detected.';
     } else if (riskScore >= 60) {
       impact += ' Moderate privacy concerns identified.';
     }
-    
+
     return impact;
   }
 
-  // Check if domain is safe (CDN, essential services)
   isSafeDomain(domain, safeDomains) {
-    return safeDomains.some(safe => 
+    return safeDomains.some(safe =>
       domain === safe || domain.endsWith(`.${safe}`)
     );
   }
 
-  // Check if domain is critical (payment, auth)
   isCriticalDomain(domain, criticalDomains) {
-    return criticalDomains.some(critical => 
+    return criticalDomains.some(critical =>
       domain.includes(critical) || critical.includes(domain)
     );
   }
 }
 
-// Singleton instance
 export const trackerKnowledge = new TrackerKnowledge();

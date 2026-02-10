@@ -1,0 +1,10 @@
+
+
+signin url user->https://639140328163.signin.aws.amazon.com/console
+username->himt-admin
+password->E@J4fDMK2Veg25Y
+
+
+
+
+arn:aws:iam::639140328163:role/HIMTLambdaRole

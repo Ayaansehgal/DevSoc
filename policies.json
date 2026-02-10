@@ -1,5 +1,21 @@
 {
-  "version": "2.0",
+  "version": "2.1",
+  "mlSettings": {
+    "categoryClassifier": {
+      "enabled": true,
+      "confidenceThreshold": 0.7
+    },
+    "fingerprintDetection": {
+      "enabled": true,
+      "riskWeight": 25
+    },
+    "patternAnalysis": {
+      "enabled": true,
+      "baselineDays": 7,
+      "anomalyThreshold": 2.0,
+      "maxStorageMB": 5
+    }
+  },
   "thresholds": {
     "restrict": 30,
     "sandbox": 60,
@@ -11,19 +27,41 @@
   },
   "contextPatterns": {
     "checkout": [
-      "/checkout", "/cart", "/basket", "/payment", "/pay",
-      "/order", "/billing", "/purchase", "/shop/cart",
-      "/buy", "/paymentmethod", "/shipping"
+      "/checkout",
+      "/cart",
+      "/basket",
+      "/payment",
+      "/pay",
+      "/order",
+      "/billing",
+      "/purchase",
+      "/shop/cart",
+      "/buy",
+      "/paymentmethod",
+      "/shipping"
     ],
     "login": [
-      "/login", "/signin", "/auth", "/authenticate",
-      "/sso", "/oauth", "/session", "/account/login",
-      "/user/login", "/connect"
+      "/login",
+      "/signin",
+      "/auth",
+      "/authenticate",
+      "/sso",
+      "/oauth",
+      "/session",
+      "/account/login",
+      "/user/login",
+      "/connect"
     ],
     "payment": [
-      "/stripe", "/paypal", "/square", "/braintree",
-      "/checkout", "/payment-method", "/cardpayment",
-      "/paysecure", "/payment/process"
+      "/stripe",
+      "/paypal",
+      "/square",
+      "/braintree",
+      "/checkout",
+      "/payment-method",
+      "/cardpayment",
+      "/paysecure",
+      "/payment/process"
     ]
   },
   "domSignals": {
@@ -59,19 +97,28 @@
       "description": "Limited fingerprinting, minimized headers",
       "color": "#f59e0b",
       "icon": "⚠",
-      "actions": ["strip_cookies", "limit_headers"]
+      "actions": [
+        "strip_cookies",
+        "limit_headers"
+      ]
     },
     "sandbox": {
       "description": "No persistence, isolated execution",
       "color": "#ef4444",
       "icon": "⊘",
-      "actions": ["block_cookies", "block_storage", "isolate"]
+      "actions": [
+        "block_cookies",
+        "block_storage",
+        "isolate"
+      ]
     },
     "block": {
       "description": "Completely blocked",
       "color": "#7f1d1d",
       "icon": "✕",
-      "actions": ["block_request"]
+      "actions": [
+        "block_request"
+      ]
     }
   },
   "riskFactors": {

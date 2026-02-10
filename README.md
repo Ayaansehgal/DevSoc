@@ -69,63 +69,26 @@ A hackathon-grade Chrome extension that makes invisible web tracking visible, ex
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## 📦 Installation
 
-### Option 1: From ZIP (Recommended)
+## 📦 Installation & Usage
 
-1. Extract `how-i-met-your-tracker-v2.zip`
-2. Open Chrome → `chrome://extensions/`
-3. Enable **Developer mode** (top-right toggle)
-4. Click **Load unpacked**
-5. Select the extracted folder
+For detailed system requirements, please see [REQUIREMENTS.md](./REQUIREMENTS.md).
+For a step-by-step installation and user guide, please see [USAGE.md](./USAGE.md).
 
-### Option 2: From Source
+### Quick Start (Load Unpacked)
 
-```bash
-git clone <repository-url>
-cd how-i-met-your-tracker-v2
-# Open Chrome extensions page and load the folder
-```
+1. Open Chrome → `chrome://extensions/`
+2. Enable **Developer mode**
+3. Click **Load unpacked**
+4. Select this project folder
 
 ## 🎮 Usage Guide
 
-### Basic Usage
+See [USAGE.md](./USAGE.md) for full details on:
+- Understanding Risk Scores
+- Using the Overlay
+- Exporting Reports
 
-1. **Click the extension icon** to toggle the overlay
-2. **View detected trackers** with risk scores and enforcement modes
-3. **Click "Details"** on any tracker to see full information
-4. **Override decisions** using the Allow/Restrict/Sandbox/Block buttons
-
-### Understanding Enforcement Modes
-
-| Mode | Color | Description | When Used |
-|------|-------|-------------|-----------|
-| **Allow** | 🟢 Green | No restrictions | Risk < 30 |
-| **Restrict** | 🟡 Yellow | Limited fingerprinting | Risk 30-59 |
-| **Sandbox** | 🟠 Orange | Isolated, no persistence | Risk 60-84 |
-| **Block** | 🔴 Red | Completely blocked | Risk ≥ 85 |
-
-### Critical Context Protection
-
-When the extension detects checkout, login, or payment flows:
-- 🔴 Icon turns red and pulses
-- ⚠️ Warning banner appears
-- 🛡️ Blocking downgraded to sandboxing
-- ⏱️ Blocks deferred until safe navigation
-
-### Background Mode
-
-Enable background mode for non-intrusive monitoring:
-- ✅ Extension runs silently
-- 🚨 Alerts only for high-risk trackers (score ≥ 60)
-- 📊 Click alert to open full overlay
-
-### Exporting Reports
-
-1. Click **Export Report** button
-2. Report downloads as HTML file
-3. Open in browser to view detailed tracking analysis
-4. Share with privacy auditors or compliance teams
 
 ## ⚙️ Configuration
 
